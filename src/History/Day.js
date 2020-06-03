@@ -35,22 +35,22 @@ const Day = (props) => {
         return axios.all([getETHPrices(t), getBTCPrices(t), getLTCPrices(t)]);
     }
     
-    
-    const saveStateToLocalStorage = () => {
-		localStorage.setItem(`day-state-${day}`, JSON.stringify(dayPrice));
+    const saveStateToLocalStorage = (prices) => {
+		localStorage.setItem(`day-state-${day}`, JSON.stringify(prices));
     };
     
     // This function uses the api responses to set the price data and custom status
     // could be done more dynamically to account for variation in what is returned
     // and to allow for other cryptos to be queried.
     const handleSuccess = (eth, btc, ltc) => {
-        setDayPrice({
+        const prices = {
             date: moment.unix(date).format("MMMM Do YYYY"),
             ETH: eth.data.ETH.USD,
             BTC: btc.data.BTC.USD,
             LTC: ltc.data.LTC.USD
-        });
-        saveStateToLocalStorage();
+        }
+        saveStateToLocalStorage(prices);
+        setDayPrice(prices);
         // Check if the response was empty or if the dayPrice state object was populated
         Object.keys(dayPrice).length > 0 ? setStatus('empty') : setStatus('success');
     }
@@ -63,7 +63,7 @@ const Day = (props) => {
 
     // accesses saved local state values and passes them to app state
 	const restoreStateFromLocalStorage = () => {
-		const state = JSON.parse(localStorage.getItem('today-state'));
+		const state = JSON.parse(localStorage.getItem(`day-state-${day}`));
 		setDayPrice(state);
     };
     
