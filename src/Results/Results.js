@@ -1,21 +1,25 @@
 import React from 'react';
+import './Results.css';
 
-const Results = ({ results }) => {
+const Results = (props) => {
+    // pull results off props
+    const { results } = props;
+
     return (
-        <div className="history--section__box__inner">
-        <h4>{results.date}</h4>
-        <div className="columns">
-            <div className="column">
-                <p>1 BTC = ${results.btc}</p>
-            </div>
-            <div className="column">
-                <p>1 ETH = ${results.eth}</p>
-            </div>
-            <div className="column">
-                <p>1 LTC = ${results.ltc}</p>
+        <div className="results">
+            <p className="date">{results.date}</p>
+            <div className="columns">
+                {Object.keys(results).map(key => {
+                    if (key === 'date') return null
+                    return (
+                        <div className="column" key={key}>
+                            <h5>${results[key]} USD</h5>
+                            <p>1 {key}</p>
+                        </div>
+                    )
+                })}
             </div>
         </div>
-    </div>
     )
 }
 

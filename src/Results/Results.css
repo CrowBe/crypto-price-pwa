@@ -1,0 +1,19 @@
+.columns {
+    display: flex;
+    justify-content: center;
+}
+.column {
+    display: flex;
+    flex-direction: column;
+    text-align: center;
+    justify-content: space-between;
+    width: 30%;
+    margin-bottom: 2vh;
+}
+.date {
+    font-size: 1.2em;
+}
+h5 {
+    margin: 0 auto;
+    max-width: 85%;
+}
