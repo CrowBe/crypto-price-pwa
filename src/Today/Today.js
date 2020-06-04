@@ -18,7 +18,7 @@ const Today = () => {
     // This function posts the price data to our server that updates our pusher
     // channel that we then create a subscription to.
     const sendPricePusher = (response) => {
-        axios.post('https://crypto-track-server.herokuapp.com//prices/new', {
+        axios.post('https://crypto-track-server.herokuapp.com/prices/new', {
             prices: response.data
         })
             .catch(error => {
