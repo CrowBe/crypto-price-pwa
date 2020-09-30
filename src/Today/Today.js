@@ -25,6 +25,17 @@ const Today = () => {
                 console.log(error)
             })
     }
+      
+    function showNotification(title, message) {
+        if ('Notification' in window) {
+            navigator.serviceWorker.ready.then(registration => {
+                registration.showNotification(title, {
+                    body: message,
+                    tag: 'notification-sample'
+                });
+            });
+        }
+    }
 
     
     const saveStateToLocalStorage = (today) => {
@@ -98,7 +109,7 @@ const Today = () => {
         fetchResults();
         const cryptoSubscription = setInterval(() => {
             fetchResults(sendPricePusher, false);
-        }, 10000);
+        }, 100000);
 
         prices.bind('prices', price => {
             // When the pusher channel broadcasts an update we bind that data to our price state.
@@ -108,6 +119,11 @@ const Today = () => {
                 ETH: price.prices.ETH.USD,
                 LTC: price.prices.LTC.USD
             }
+            Notification.requestPermission(result => {
+                if (result === 'granted') {
+                    showNotification('Price Update!', 'Check the new live prices.')
+                }
+            });
             saveStateToLocalStorage(today);
             setTodayPrice(today);
             Object.keys(todayPrice).length > 0 ? setStatus('empty') : setStatus('success');
