@@ -7,7 +7,7 @@ import moment from 'moment';
 import { LoadingState, ErrorState, EmptyState, Results } from '../Results';
 const cluster = process.env.REACT_APP_PUSHER_CLUSTER;
 const appKey = process.env.REACT_APP_PUSHER_KEY;
-const apiKey = `&api_key={${process.env.REACT_APP_COIN_API_KEY}}`;
+const apiKey = process.env.REACT_APP_COIN_API_KEY;
 
 const Today = () => {
     // initialise default state values and setters for prices
@@ -50,7 +50,9 @@ const Today = () => {
 
     // reuseable call to our api
     const getTodayPrice = () => {
-        return axios.get('https://min-api.cryptocompare.com/data/pricemulti?fsyms=BTC,ETH,LTC&tsyms=USD' + apiKey);
+        return axios.get('https://min-api.cryptocompare.com/data/pricemulti?fsyms=BTC,ETH,LTC&tsyms=AUD', {
+            authorization: `ApiKey ${apiKey}`
+        });
     }
 
     // reusable api call success callback
@@ -109,7 +111,7 @@ const Today = () => {
         fetchResults();
         const cryptoSubscription = setInterval(() => {
             fetchResults(sendPricePusher, false);
-        }, 100000);
+        }, 60000);
 
         prices.bind('prices', price => {
             // When the pusher channel broadcasts an update we bind that data to our price state.

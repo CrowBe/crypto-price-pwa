@@ -5,34 +5,40 @@ import moment from 'moment';
 import axios from 'axios';
 
 // Reusable component that calls the cryptompare api for the date given in props
-// Retrieves data for the BTC, ETH & LTC to USD pairs
+// Retrieves data for the BTC, ETH & XRP to AUD pairs
 const Day = (props) => {
     const [ dayPrice, setDayPrice ] = useState({});
     const [error, setError] = useState(null)
     const { Status, setStatus } = useStatus('loading');
     const { day } = props;
-    const apiKey = `&api_key={${process.env.REACT_APP_COIN_API_KEY}}`;
+    const apiKey = process.env.REACT_APP_COIN_API_KEY;
     let date = moment().subtract(day, 'days').unix();
 
     // This function gets the ETH price for a specific timestamp/date. The date is passed in as an argument
     const getBTCPrices = (date) => {
-        return axios.get('https://min-api.cryptocompare.com/data/pricehistorical?fsym=BTC&tsyms=USD&ts=' + date + apiKey);
+        return axios.get('https://min-api.cryptocompare.com/data/pricehistorical?fsym=BTC&tsyms=AUD&ts=' + date, {
+                authorization: `ApiKey ${apiKey}`
+            });
     }
 
     // This function gets the BTC price for a specific timestamp/date. The date is passed in as an argument
     const getETHPrices = (date) => {
-        return axios.get('https://min-api.cryptocompare.com/data/pricehistorical?fsym=ETH&tsyms=USD&ts=' + date + apiKey);
+        return axios.get('https://min-api.cryptocompare.com/data/pricehistorical?fsym=ETH&tsyms=AUD&ts=' + date, {
+            authorization: `ApiKey ${apiKey}`
+        });
     }
 
-    // This function gets the LTC price for a specific timestamp/date. The date is passed in as an argument
-    const getLTCPrices = (date) => {
-        return axios.get('https://min-api.cryptocompare.com/data/pricehistorical?fsym=LTC&tsyms=USD&ts=' + date + apiKey);
+    // This function gets the XRP price for a specific timestamp/date. The date is passed in as an argument
+    const getXRPPrices = (date) => {
+        return axios.get('https://min-api.cryptocompare.com/data/pricehistorical?fsym=XRP&tsyms=AUD&ts=' + date, {
+            authorization: `ApiKey ${apiKey}`
+        });
     }
 
     const getDayPrice = (t) => {
         // date is passed in as t and axios.all is used to make concurrent API requests.
         // we call and return axios.all so that we can handle the responses together
-        return axios.all([getETHPrices(t), getBTCPrices(t), getLTCPrices(t)]);
+        return axios.all([getETHPrices(t), getBTCPrices(t), getXRPPrices(t)]);
     }
     
     const saveStateToLocalStorage = (prices) => {
@@ -42,12 +48,12 @@ const Day = (props) => {
     // This function uses the api responses to set the price data and custom status
     // could be done more dynamically to account for variation in what is returned
     // and to allow for other cryptos to be queried.
-    const handleSuccess = (eth, btc, ltc) => {
+    const handleSuccess = (eth, btc, xrp) => {
         const prices = {
             date: moment.unix(date).format("MMMM Do YYYY"),
-            ETH: eth.data.ETH.USD,
-            BTC: btc.data.BTC.USD,
-            LTC: ltc.data.LTC.USD
+            ETH: eth.data.ETH.AUD,
+            BTC: btc.data.BTC.AUD,
+            XRP: xrp.data.XRP.AUD
         }
         saveStateToLocalStorage(prices);
         setDayPrice(prices);
