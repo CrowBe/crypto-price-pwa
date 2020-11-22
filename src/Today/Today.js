@@ -50,7 +50,7 @@ const Today = () => {
 
     // reuseable call to our api
     const getTodayPrice = () => {
-        return axios.get('https://min-api.cryptocompare.com/data/pricemulti?fsyms=BTC,ETH,LTC&tsyms=AUD', {
+        return axios.get('https://min-api.cryptocompare.com/data/pricemulti?fsyms=BTC,ETH,XRP&tsyms=AUD', {
             authorization: `ApiKey ${apiKey}`
         });
     }
@@ -60,9 +60,9 @@ const Today = () => {
         const { data } = response;
         const today = {
             date: `Price is current as of: ${moment().format('h:mm A')}`,
-            BTC: data.BTC.USD,
-            ETH: data.ETH.USD,
-            LTC: data.LTC.USD
+            BTC: data.BTC.AUD,
+            ETH: data.ETH.AUD,
+            LTC: data.LTC.AUD
         }
         saveStateToLocalStorage(today);
         setTodayPrice(today);
@@ -117,9 +117,9 @@ const Today = () => {
             // When the pusher channel broadcasts an update we bind that data to our price state.
             let today = {
                 date: `Price is current as of: ${moment().format('h:mm A')}`,
-                BTC: price.prices.BTC.USD,
-                ETH: price.prices.ETH.USD,
-                LTC: price.prices.LTC.USD
+                BTC: price.prices.BTC.AUD,
+                ETH: price.prices.ETH.AUD,
+                XRP: price.prices.XRP.AUD
             }
             Notification.requestPermission(result => {
                 if (result === 'granted') {

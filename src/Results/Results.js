@@ -13,7 +13,7 @@ const Results = (props) => {
                     if (key === 'date') return null
                     return (
                         <div className="column" key={key}>
-                            <h5>${results[key]} USD</h5>
+                            <h5>${results[key]} AUD</h5>
                             <p>1 {key}</p>
                         </div>
                     )
