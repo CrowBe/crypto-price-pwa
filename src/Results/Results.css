@@ -1,19 +1,24 @@
 .columns {
-    display: flex;
-    justify-content: center;
+  display: flex;
+  justify-content: center;
 }
 .column {
-    display: flex;
-    flex-direction: column;
-    text-align: center;
-    justify-content: space-between;
-    width: 30%;
-    margin-bottom: 2vh;
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+  justify-content: space-between;
+  width: 30%;
+  /* margin-bottom: 2vh; */
 }
 .date {
-    font-size: 1.2em;
+  font-size: 1.1em;
 }
 h5 {
-    margin: 0 auto;
-    max-width: 85%;
+  margin: 1.5vh auto;
+  max-width: 85%;
+  font-size: 1em;
+}
+p {
+  margin: 1vh auto;
+  font-size: 1em;
 }

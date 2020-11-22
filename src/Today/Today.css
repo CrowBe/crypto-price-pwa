@@ -1,42 +1,51 @@
 .today-section-container {
-	display: flex;
-	flex-direction: column;
-	justify-content: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .today-section-container h2 {
-	margin-bottom: 0;
-	display: inline-block;
+  margin-bottom: 0;
+}
+
+.today-section-container .date {
+  font-style: italic;
 }
 
 .today-section-container .columns {
-	width: 95%;
+  width: 95%;
 }
 
 .today-section-container h5 {
-	font-size: 1em;
+  font-size: 1em;
+  color: white;
+}
+.today-section-container .columns p {
+  font-size: 1em;
+  color: white;
 }
 
 .today-section-container .columns {
-	border-bottom: 1px solid grey;
-	margin: auto;
+  border-bottom: 1px solid grey;
+  margin: auto;
+  background-color: #588056;
 }
 
 .today-section-container .column:nth-of-type(2n) {
-    border-left: 1px solid grey;
-	border-right: 1px solid grey;
+  border-left: 1px solid grey;
+  border-right: 1px solid grey;
 }
 
 @media only screen and (min-width: 768px) {
-	.today-section-container .columns {
-		width: 85%;
-	}
+  .today-section-container .columns {
+    width: 85%;
+  }
 
-	.today-section-container h5 {
-		font-size: 1.3em;
-	}
-	
-	.today-section-container p {
-		font-size: 1.2em;
-	}
+  .today-section-container h5 {
+    font-size: 1.3em;
+  }
+
+  .today-section-container p {
+    font-size: 1.2em;
+  }
 }

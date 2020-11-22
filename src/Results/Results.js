@@ -14,7 +14,7 @@ const Results = (props) => {
                     return (
                         <div className="column" key={key}>
                             <h5>${results[key]} AUD</h5>
-                            <p>1 {key}</p>
+                            <p>{key}</p>
                         </div>
                     )
                 })}

@@ -1,24 +1,35 @@
+@import url("https://fonts.googleapis.com/css2?family=Roboto+Condensed&display=swap");
+
 body {
+  margin: 0;
+  background-color: #e2e8dd;
+}
+
+.navbar {
+  background-color: #363732;
+  height: 10vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.navbar .navbar-header {
+  color: white;
+  text-align: center;
+  padding-top: 2vh;
+  font-family: "Roboto Condensed", sans-serif;
   margin: 0;
 }
 
-.topheader {
-  background-color: #174c80;
-}
-.navbar {
-  background-color: #174c80;
+footer {
+  background-color: #363732;
   display: flex;
-  justify-content: space-evenly;
-  align-items: center;
-  height: 10vh;
+  justify-content: space-around;
+  padding: 1vh 0;
 }
 
-.navbar-item {
-  color: #fff;
-}
-
-.nav-item-container {
-  width: 25%;
+.footer-item {
+  color: #ffffff;
 }
 
 .app-content {
@@ -29,5 +40,20 @@ body {
 h1 {
   text-align: center;
   font-size: 30px;
-  text-decoration: underline;
+  font-family: "Roboto Condensed", sans-serif;
+  text-decoration: none;
+}
+
+h2 {
+  color: white;
+  background-color: #363732;
+  font-family: "Roboto Condensed", sans-serif;
+  padding: 1vh 0;
+  padding-left: 10%;
+}
+
+@media only screen and (min-width: 768px) {
+  body {
+    font-size: larger;
+  }
 }

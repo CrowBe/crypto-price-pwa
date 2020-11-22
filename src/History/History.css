@@ -1,0 +1,12 @@
+.history-section-container .section-description {
+  font-size: 1.1em;
+  font-style: italic;
+}
+
+.history-section-container h2 {
+  margin-bottom: 0;
+}
+
+.history-section-container em {
+  font-size: 1.2em;
+}

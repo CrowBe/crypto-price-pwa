@@ -60,8 +60,8 @@ const Today = () => {
         const { data } = response;
         const today = {
             date: `Price is current as of: ${moment().format('h:mm A')}`,
-            BTC: data.BTC.AUD,
             ETH: data.ETH.AUD,
+            BTC: data.BTC.AUD,
             XRP: data.XRP.AUD
         }
         saveStateToLocalStorage(today);
@@ -117,8 +117,8 @@ const Today = () => {
             // When the pusher channel broadcasts an update we bind that data to our price state.
             let today = {
                 date: `Price is current as of: ${moment().format('h:mm A')}`,
-                BTC: price.prices.BTC.AUD,
                 ETH: price.prices.ETH.AUD,
+                BTC: price.prices.BTC.AUD,
                 XRP: price.prices.XRP.AUD
             }
             Notification.requestPermission(result => {
@@ -141,7 +141,7 @@ const Today = () => {
     // Return the structured JSX with dynamic data
     return (
         <div className="today-section-container">
-            <h2>Today's Prices</h2>
+            <h2>Live Price</h2>
             <Status
                 loading={<LoadingState />}
                 empty={<EmptyState />}

@@ -11,12 +11,7 @@ const App = () => {
 	  <div className="App">
 			<header>
 				<nav className="navbar">
-					<div className="nav-item-container">
-						<span className="navbar-item">PusherCoins</span>
-					</div>
-					<div className="nav-item-container">
-						<a className="navbar-item" href="https://pusher.com" target="_blank" rel="noopener noreferrer">Pusher.com</a>
-					</div>
+					<h2 className="navbar-header">Easy Crypto Tracking</h2>
 				</nav>
 			</header>
 			<section className="app-content">
@@ -26,6 +21,11 @@ const App = () => {
 					<History />
 				</div>
 			</section>
+			<footer>
+				<a className="footer-item" href="https://pusher.com" target="_blank" rel="noopener noreferrer">Push Service</a>
+				<a className="footer-item" href="https://min-api.cryptocompare.com" target="_blank" rel="noopener noreferrer">Price Api</a>
+				<a className="footer-item" href="https://vercel.com" target="_blank" rel="noopener noreferrer">Deployment</a>
+			</footer>
 	  </div>
 	);
 }
