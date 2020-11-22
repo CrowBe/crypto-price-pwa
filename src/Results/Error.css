@@ -1,0 +1,13 @@
+.error-message {
+  color: rgb(235, 68, 68);
+}
+
+.error-button {
+  margin-left: 1vw;
+  background-color: rgb(235, 68, 68);
+  padding: 5px;
+  border-radius: 2px;
+  border: none;
+  color: white;
+  box-shadow: -0.5px -0.5px 2px 2px rgba(235, 68, 68, 0.479);
+}

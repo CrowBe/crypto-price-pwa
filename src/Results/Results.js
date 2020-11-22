@@ -11,9 +11,15 @@ const Results = (props) => {
             <div className="columns">
                 {Object.keys(results).map(key => {
                     if (key === 'date') return null
+                    let price = results[key].toString();
+                    const dollarsAndCents = price.split(".");
+                    if (dollarsAndCents[0].length > 3) {
+                        price = `${dollarsAndCents[0].slice(0, -3)},${dollarsAndCents[0].slice(-3)}.${dollarsAndCents[1]}`;
+                    }
+                    price = `$${price} AUD`
                     return (
                         <div className="column" key={key}>
-                            <h5>${results[key]} AUD</h5>
+                            <h5>{price}</h5>
                             <p>{key}</p>
                         </div>
                     )

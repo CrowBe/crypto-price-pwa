@@ -50,7 +50,7 @@ const Today = () => {
 
     // reuseable call to our api
     const getTodayPrice = () => {
-        return axios.get('https://min-api.cryptocompare.com/data/pricemulti?fsyms=BTC,ETH,XRP&tsyms=AUD', {
+        return axios.get("https://min-api.cryptocompare.com/data/pricemulti?fsyms=BTC,ETH,XRP&tsyms=AUD", {
             authorization: `ApiKey ${apiKey}`
         });
     }
@@ -84,8 +84,6 @@ const Today = () => {
         }
         return (
             getTodayPrice()
-                // axios.spread is used to ensure all of the requests complete before passing
-                // the responses to handleSuccess. Should minimize DOM updates.
                 .then(callback)
                 .catch(handleError)
         );
@@ -141,7 +139,7 @@ const Today = () => {
     // Return the structured JSX with dynamic data
     return (
         <div className="today-section-container">
-            <h2>Live Price</h2>
+            <h2>Live Prices</h2>
             <Status
                 loading={<LoadingState />}
                 empty={<EmptyState />}

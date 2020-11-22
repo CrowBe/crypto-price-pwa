@@ -1,12 +1,13 @@
 import React from 'react';
+import './Error.css';
 
 // Displayed if api request return error
 const ErrorState = ({ error, retry }) => {
     console.log(error);
     return (
         <section>
-            <span>Sorry, an error occured. </span>
-            { retry ? <button onClick={retry}>Try again</button> : null }
+            <span className="error-message">Sorry, an error occured </span>
+            { retry ? <button className="error-button" onClick={retry}>Reload</button> : null }
         </section>
     )
 }
