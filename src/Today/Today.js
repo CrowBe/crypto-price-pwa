@@ -96,7 +96,6 @@ const Today = () => {
         }
         
         // establish a connection to Pusher
-        console.log("connection to pusher", appKey)
         const pusher = new Pusher(appKey, {
             cluster: cluster,
             encrypted: true
