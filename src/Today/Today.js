@@ -62,7 +62,7 @@ const Today = () => {
             date: `Price is current as of: ${moment().format('h:mm A')}`,
             BTC: data.BTC.AUD,
             ETH: data.ETH.AUD,
-            LTC: data.LTC.AUD
+            XRP: data.XRP.AUD
         }
         saveStateToLocalStorage(today);
         setTodayPrice(today);
