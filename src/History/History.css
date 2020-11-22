@@ -1,5 +1,5 @@
 .history-section-container {
-  margin-bottom: 2vh;
+  margin-bottom: 3vh;
 }
 
 .history-section-container .section-description {
@@ -9,6 +9,7 @@
 
 .history-section-container h2 {
   margin-bottom: 0;
+  padding-left: 10%;
 }
 
 .history-section-container em {

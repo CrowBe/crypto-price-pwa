@@ -14,7 +14,7 @@ const Results = (props) => {
                     let price = results[key].toString();
                     const dollarsAndCents = price.split(".");
                     if (dollarsAndCents[0].length > 3) {
-                        price = `${dollarsAndCents[0].slice(0, -3)},${dollarsAndCents[0].slice(-3)}.${dollarsAndCents[1]}`;
+                        price = `${dollarsAndCents[0].slice(0, -3)},${dollarsAndCents[0].slice(-3)}.${dollarsAndCents[1] || "00"}`;
                     }
                     price = `$${price} AUD`
                     return (

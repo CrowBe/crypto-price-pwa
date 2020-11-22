@@ -2,9 +2,12 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
+  margin-bottom: 3vh;
 }
 
 .today-section-container h2 {
+  margin-top: 0;
+  padding-left: 10%;
   margin-bottom: 0;
 }
 
