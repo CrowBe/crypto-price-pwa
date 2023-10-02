@@ -8,11 +8,11 @@ import { format } from "date-fns";
 import { getPriceMulti } from "../cryptoService";
 import { AUDollarFormatter } from "../utils";
 import { enAU } from "date-fns/locale";
-const cluster = process.env.REACT_APP_PUSHER_CLUSTER;
-const appKey = process.env.REACT_APP_PUSHER_KEY;
-const pusherApi = process.env.REACT_APP_PUSHER_API;
 
 const Today = () => {
+  const cluster = process.env.REACT_APP_PUSHER_CLUSTER;
+  const appKey = process.env.REACT_APP_PUSHER_KEY;
+  const pusherApi = process.env.REACT_APP_PUSHER_API;
   // initialise default state values and setters for prices
   const [todayPrice, setTodayPrice] = useState<ITodayCurrencyPriceData>();
   const [error, setError] = useState<string | null>(null);
@@ -139,7 +139,7 @@ const Today = () => {
         pusher.unsubscribe("coin-prices");
       };
     }
-  }, []);
+  }, [appKey, cluster]);
 
   // Return the structured JSX with dynamic data
   return (
