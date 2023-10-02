@@ -8,5 +8,9 @@
   "start_url": "./index.html",
   "display": "standalone",
   "theme_color": "#ffffff",
-  "background_color": "#ffffff"
+  "background_color": "#ffffff",
+  "background": {
+    "service_worked": "service-worker.js",
+    "type": "module"
+  }
 }
