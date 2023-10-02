@@ -58,18 +58,22 @@ const Today = () => {
 
   // reusable api call success callback
   const handleSuccess = (response: ITodayCurrencyPriceData) => {
-    let eth = response?.ETH || todayPrice?.ETH;
-    let btc = response?.BTC || todayPrice?.BTC;
-    let xrp = response?.XRP || todayPrice?.XRP;
-    const today: ITodayCurrencyPriceData = {
-      date: `Price is current as of: ${getCurrentTimeString()}`,
-      ETH: eth ? eth : "error",
-      BTC: btc ? btc : "error",
-      XRP: xrp ? xrp : "error",
-    };
-    saveStateToLocalStorage(today);
-    setTodayPrice(today);
-    setStatus("success");
+    if (response && (response.ETH || response.BTC || response.XRP)) {
+      let eth = response?.ETH || todayPrice?.ETH;
+      let btc = response?.BTC || todayPrice?.BTC;
+      let xrp = response?.XRP || todayPrice?.XRP;
+      const today: ITodayCurrencyPriceData = {
+        date: `Price is current as of: ${getCurrentTimeString()}`,
+        ETH: eth ? eth : "error",
+        BTC: btc ? btc : "error",
+        XRP: xrp ? xrp : "error",
+      };
+      saveStateToLocalStorage(today);
+      setTodayPrice(today);
+      setStatus("success");
+    } else {
+      setStatus("error");
+    }
   };
 
   // reusable promise error callback
