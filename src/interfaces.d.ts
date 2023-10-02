@@ -19,3 +19,15 @@ interface ICurrencyPriceData {
 interface ITodayCurrencyPriceData extends ICurrencyPriceData {
   date: string;
 }
+
+interface IHistoricalPriceData {
+  time: number;
+  high: number;
+  low: number;
+  open: number;
+  volumefrom: number;
+  volumeto: number;
+  close: number;
+  conversionType: "direct";
+  conversionSymbol: "";
+}

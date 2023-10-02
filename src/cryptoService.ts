@@ -1,7 +1,7 @@
 import cryptoCompareClient from "./api";
 
 export const getPriceMulti = async (
-  fsyms: string[],
+  fsyms: CoinKey[],
   tsyms: string[]
 ): Promise<IPriceData> =>
   (
@@ -11,7 +11,7 @@ export const getPriceMulti = async (
   ).data;
 
 export const getPriceHistorical = async (
-  fsym: string,
+  fsym: CoinKey,
   tsyms: string[],
   ts: number
 ): Promise<IPriceData> =>
@@ -20,3 +20,11 @@ export const getPriceHistorical = async (
       params: { fsym, tsyms, ts },
     })
   ).data;
+
+export const getPriceHistoricalDays = async (
+  fsym: CoinKey,
+  tsym: "AUD" | "USD" = "AUD",
+  limit: number = 10
+): Promise<{ Data: IHistoricalPriceData[] }> =>
+  (await cryptoCompareClient.get("histoday", { params: { fsym, tsym, limit } }))
+    .data;

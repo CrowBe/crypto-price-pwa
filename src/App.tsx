@@ -4,7 +4,7 @@ import History from "./History/History";
 
 function App() {
   return (
-    <div className="App">
+    <div id="app-container">
       <header>
         <nav className="navbar">
           <h2 className="navbar-header">Easy Crypto Tracking</h2>
