@@ -6,8 +6,10 @@ import useStatus from "../hooks/useStatus";
 import { LoadingState, ErrorState, EmptyState, Results } from "../Results";
 import { format } from "date-fns";
 import { getPriceMulti } from "../cryptoService";
+import { AUDollarFormatter } from "../utils";
 const cluster = process.env.REACT_APP_PUSHER_CLUSTER;
 const appKey = process.env.REACT_APP_PUSHER_KEY;
+const pusherApi = process.env.REACT_APP_PUSHER_API;
 
 const Today = () => {
   // initialise default state values and setters for prices
@@ -17,13 +19,13 @@ const Today = () => {
 
   // This function posts the price data to our server that updates our pusher
   // channel that we then create a subscription to.
-  const sendPricePusher = (response: IPriceData) => {
+  const sendPricePusher = (response: ITodayCurrencyPriceData) => {
     axios
-      .post("https://crypto-price-server.onrender.com/prices/new", {
+      .post(`${pusherApi}/prices/new`, {
         ...todayPrice,
-        ETH: response.ETH?.AUD,
-        BTC: response.BTC?.AUD,
-        XRP: response.XRP?.AUD,
+        ETH: response.ETH,
+        BTC: response.BTC,
+        XRP: response.XRP,
       })
       .catch(handleError);
   };
@@ -52,12 +54,15 @@ const Today = () => {
   const getCurrentTimeString = (): string => format(new Date(), "KK:mm a");
 
   // reusable api call success callback
-  const handleSuccess = (response: IPriceData) => {
+  const handleSuccess = (response: ITodayCurrencyPriceData) => {
+    let eth = response?.ETH || todayPrice?.ETH;
+    let btc = response?.BTC || todayPrice?.BTC;
+    let xrp = response?.XRP || todayPrice?.XRP;
     const today: ITodayCurrencyPriceData = {
       date: `Price is current as of: ${getCurrentTimeString()}`,
-      ETH: response.ETH?.AUD || todayPrice?.ETH || "error",
-      BTC: response.BTC?.AUD || todayPrice?.BTC || "error",
-      XRP: response.XRP?.AUD || todayPrice?.XRP || "error",
+      ETH: eth ? eth : "error",
+      BTC: btc ? btc : "error",
+      XRP: xrp ? xrp : "error",
     };
     saveStateToLocalStorage(today);
     setTodayPrice(today);
@@ -77,7 +82,18 @@ const Today = () => {
       setStatus("loading");
     }
     getPriceMulti(["BTC", "ETH", "XRP"], ["AUD"])
-      .then((res) => callback(res))
+      .then((res) => {
+        let eth = res?.ETH?.AUD || todayPrice?.ETH;
+        let btc = res?.BTC?.AUD || todayPrice?.BTC;
+        let xrp = res?.XRP?.AUD || todayPrice?.XRP;
+        let data: ITodayCurrencyPriceData = {
+          date: `Price is current as of: ${getCurrentTimeString()}`,
+          ETH: eth ? AUDollarFormatter.format(parseFloat(eth)) : "error",
+          BTC: btc ? AUDollarFormatter.format(parseFloat(btc)) : "error",
+          XRP: xrp ? AUDollarFormatter.format(parseFloat(xrp)) : "error",
+        };
+        callback(data);
+      })
       .catch(handleError);
     return setTimeout(() => {
       fetchResults(sendPricePusher);
@@ -102,14 +118,14 @@ const Today = () => {
       // Make the initial call to our api
       const cryptoSubscription = fetchResults();
 
-      prices.bind("prices", (data: IPriceData) => {
+      prices.bind("prices", (data: ITodayCurrencyPriceData) => {
         // When the pusher channel broadcasts an update we bind that data to our price state.
         handleSuccess(data);
-        Notification.requestPermission((result) => {
-          if (result === "granted") {
-            showNotification("Price Update!", "Check the new live prices.");
-          }
-        });
+        // Notification.requestPermission((result) => {
+        //   if (result === "granted") {
+        //     showNotification("Price Update!", "Check the new live prices.");
+        //   }
+        // });
       });
       return () => {
         clearTimeout(cryptoSubscription);
