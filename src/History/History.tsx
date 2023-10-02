@@ -1,15 +1,18 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import "./History.css";
 import { getPriceHistoricalDays } from "../cryptoService";
 import { format, fromUnixTime } from "date-fns";
-import { Results } from "../Results";
-import { AUDollarFormatter } from "../utils";
+import { EmptyState, ErrorState, LoadingState, Results } from "../Results";
+import { AUDollarFormatter, sortByDateDescending } from "../utils";
+import useStatus from "../hooks/useStatus";
 
 const History = () => {
   const [numDays, setNumDays] = useState<number>(2);
   const [historicalData, setHistoricalData] = useState<{
     [key: string]: ITodayCurrencyPriceData;
   }>();
+  const [error, setError] = useState<string>("");
+  const { Status, setStatus } = useStatus("loading");
   const adjustNumDays = (direction: "decrement" | "increment") => {
     if (direction === "decrement" && numDays > 1) {
       setNumDays(numDays - 1);
@@ -20,7 +23,22 @@ const History = () => {
     }
   };
 
-  const fetchDays = () => {
+  const restoreStateFromLocalStorage = useCallback(() => {
+    let temp: { [key: string]: ITodayCurrencyPriceData } = {};
+    for (let i = 0; i < numDays; i++) {
+      let dayState: string | null = localStorage.getItem(`day-state-${i + 1}`);
+      if (dayState) {
+        let dayObj = JSON.parse(dayState);
+        if (dayObj.date) {
+          temp[dayObj.date] = dayObj;
+        }
+      }
+    }
+    setHistoricalData(temp);
+  }, [numDays]);
+
+  const fetchDays = useCallback(() => {
+    setStatus("loading");
     getPriceHistoricalDays("BTC", "AUD", numDays - 1)
       .then((btcRes) => {
         let btc = [...btcRes.Data];
@@ -39,15 +57,23 @@ const History = () => {
               };
             }
             setHistoricalData(temp);
+            setStatus("success");
           });
         });
       })
-      .catch((err) => console.error(err));
-  };
+      .catch((err) => {
+        setError(err);
+        setStatus("error");
+      });
+  }, [numDays, setStatus]);
 
   useEffect(() => {
+    let online = window.navigator.onLine;
+    if (!online) {
+      return restoreStateFromLocalStorage();
+    }
     fetchDays();
-  }, [numDays]);
+  }, [numDays, fetchDays, restoreStateFromLocalStorage]);
   return (
     <div className="history-section-container">
       <h2>Historical Data</h2>
@@ -59,11 +85,22 @@ const History = () => {
         <button onClick={() => adjustNumDays("increment")}>+</button> days
       </p>
       <div className="days-container">
-        {historicalData
-          ? Object.keys(historicalData).map((day) => {
-              return <Results results={historicalData[day]} key={day} />;
-            })
-          : null}
+        <Status
+          loading={<LoadingState />}
+          empty={<EmptyState />}
+          error={<ErrorState error={error} retry={fetchDays} />}
+          success={
+            <>
+              {historicalData
+                ? Object.keys(historicalData)
+                    .reverse()
+                    .map((day) => (
+                      <Results results={historicalData[day]} key={day} />
+                    ))
+                : null}
+            </>
+          }
+        />
       </div>
     </div>
   );

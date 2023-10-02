@@ -7,6 +7,7 @@ import { LoadingState, ErrorState, EmptyState, Results } from "../Results";
 import { format } from "date-fns";
 import { getPriceMulti } from "../cryptoService";
 import { AUDollarFormatter } from "../utils";
+import { enAU } from "date-fns/locale";
 const cluster = process.env.REACT_APP_PUSHER_CLUSTER;
 const appKey = process.env.REACT_APP_PUSHER_KEY;
 const pusherApi = process.env.REACT_APP_PUSHER_API;
@@ -30,16 +31,17 @@ const Today = () => {
       .catch(handleError);
   };
 
-  function showNotification(title: string, message: string) {
-    if ("Notification" in window) {
-      navigator.serviceWorker.ready.then((registration) => {
-        registration.showNotification(title, {
-          body: message,
-          tag: "notification-sample",
-        });
-      });
-    }
-  }
+  // TODO: Reimplement proper notifications
+  // function showNotification(title: string, message: string) {
+  //   if ("Notification" in window) {
+  //     navigator.serviceWorker.ready.then((registration) => {
+  //       registration.showNotification(title, {
+  //         body: message,
+  //         tag: "notification-sample",
+  //       });
+  //     });
+  //   }
+  // }
 
   const saveStateToLocalStorage = (today: ITodayCurrencyPriceData) => {
     localStorage.setItem("today-state", JSON.stringify(today));
@@ -51,7 +53,8 @@ const Today = () => {
     if (todayState) setTodayPrice(JSON.parse(todayState));
   };
 
-  const getCurrentTimeString = (): string => format(new Date(), "KK:mm a");
+  const getCurrentTimeString = (): string =>
+    format(new Date(), "KK:mm a", { locale: enAU });
 
   // reusable api call success callback
   const handleSuccess = (response: ITodayCurrencyPriceData) => {
@@ -132,7 +135,7 @@ const Today = () => {
         pusher.unsubscribe("coin-prices");
       };
     }
-  }, [appKey, cluster]);
+  }, []);
 
   // Return the structured JSX with dynamic data
   return (
