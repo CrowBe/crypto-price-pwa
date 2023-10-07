@@ -124,6 +124,9 @@ const Today = () => {
       const prices = pusher.subscribe("coin-prices");
       // Make the initial call to our api
       const cryptoSubscription = fetchResults();
+      pusher.connection.bind("error", function (error: string) {
+        console.error("connection error", error);
+      });
 
       prices.bind("prices", (data: ITodayCurrencyPriceData) => {
         // When the pusher channel broadcasts an update we bind that data to our price state.
