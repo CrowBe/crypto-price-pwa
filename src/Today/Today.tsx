@@ -117,10 +117,12 @@ const Today = () => {
       // establish a connection to Pusher
       const pusher = new Pusher(appKey, {
         cluster: cluster,
+        forceTLS: true,
+        enabledTransports: ["ws", "wss", "xhr_polling"],
       });
       // Subscribe to the 'coin-prices' channel
       const prices = pusher.subscribe("coin-prices");
-
+      pusher.bind("pusher:error", (err: string) => console.log(err));
       // Make the initial call to our api
       const cryptoSubscription = fetchResults();
 
