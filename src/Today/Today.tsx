@@ -122,7 +122,6 @@ const Today = () => {
       });
       // Subscribe to the 'coin-prices' channel
       const prices = pusher.subscribe("coin-prices");
-      pusher.bind("pusher:error", (err: string) => console.log(err));
       // Make the initial call to our api
       const cryptoSubscription = fetchResults();
 
@@ -137,7 +136,6 @@ const Today = () => {
       });
       return () => {
         clearTimeout(cryptoSubscription);
-        console.log("UNSUBBING");
         pusher.unsubscribe("coin-prices");
       };
     }
