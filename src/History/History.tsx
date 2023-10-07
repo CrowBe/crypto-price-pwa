@@ -3,7 +3,7 @@ import "./History.css";
 import { getPriceHistoricalDays } from "../cryptoService";
 import { format, fromUnixTime } from "date-fns";
 import { EmptyState, ErrorState, LoadingState, Results } from "../Results";
-import { AUDollarFormatter, sortByDateDescending } from "../utils";
+import { AUDollarFormatter } from "../utils";
 import useStatus from "../hooks/useStatus";
 
 const History = () => {
@@ -39,15 +39,15 @@ const History = () => {
 
   const fetchDays = useCallback(() => {
     setStatus("loading");
-    getPriceHistoricalDays("BTC", "AUD", numDays - 1)
+    getPriceHistoricalDays("BTC", "AUD", numDays)
       .then((btcRes) => {
         let btc = [...btcRes.Data];
-        getPriceHistoricalDays("ETH", "AUD", numDays - 1).then((ethRes) => {
+        getPriceHistoricalDays("ETH", "AUD", numDays).then((ethRes) => {
           let eth = [...ethRes.Data];
-          getPriceHistoricalDays("XRP", "AUD", numDays - 1).then((xrpRes) => {
+          getPriceHistoricalDays("XRP", "AUD", numDays).then((xrpRes) => {
             let xrp = [...xrpRes.Data];
             let temp: { [key: string]: ITodayCurrencyPriceData } = {};
-            for (let i = 0; i < numDays; i++) {
+            for (let i = numDays - 1; i >= 0; i--) {
               let dateKey = format(fromUnixTime(btc[i].time), "dd-MM-yy");
               temp[dateKey] = {
                 date: format(fromUnixTime(btc[i].time), "MMM do yy"),
@@ -92,11 +92,9 @@ const History = () => {
           success={
             <>
               {historicalData
-                ? Object.keys(historicalData)
-                    .reverse()
-                    .map((day) => (
-                      <Results results={historicalData[day]} key={day} />
-                    ))
+                ? Object.keys(historicalData).map((day) => (
+                    <Results results={historicalData[day]} key={day} />
+                  ))
                 : null}
             </>
           }

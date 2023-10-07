@@ -9,10 +9,10 @@ import { getPriceMulti } from "../cryptoService";
 import { AUDollarFormatter } from "../utils";
 import { enAU } from "date-fns/locale";
 
+const cluster = process.env.REACT_APP_PUSHER_CLUSTER;
+const appKey = process.env.REACT_APP_PUSHER_KEY;
+const pusherApi = process.env.REACT_APP_PUSHER_API;
 const Today = () => {
-  const cluster = process.env.REACT_APP_PUSHER_CLUSTER;
-  const appKey = process.env.REACT_APP_PUSHER_KEY;
-  const pusherApi = process.env.REACT_APP_PUSHER_API;
   // initialise default state values and setters for prices
   const [todayPrice, setTodayPrice] = useState<ITodayCurrencyPriceData>();
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +54,7 @@ const Today = () => {
   };
 
   const getCurrentTimeString = (): string =>
-    format(new Date(), "KK:mm a", { locale: enAU });
+    format(new Date(), "HH:mm a", { locale: enAU });
 
   // reusable api call success callback
   const handleSuccess = (response: ITodayCurrencyPriceData) => {
@@ -84,7 +84,7 @@ const Today = () => {
 
   // function that calls the api and handles the response with default callback
   // Can be passed custom response callback for passing the data to our Pusher channel
-  function fetchResults(callback = handleSuccess, statusChange = true) {
+  const fetchResults = (callback = handleSuccess, statusChange = true) => {
     if (statusChange) {
       setStatus("loading");
     }
@@ -105,7 +105,7 @@ const Today = () => {
     return setTimeout(() => {
       fetchResults(sendPricePusher);
     }, 60000);
-  }
+  };
 
   // This is called on render and rerender. Use Status hook needs to be implemented.
   useEffect(() => {
@@ -118,7 +118,7 @@ const Today = () => {
       const pusher = new Pusher(appKey, {
         cluster: cluster,
       });
-
+      console.log(pusher.channel("coin-prices"));
       // Subscribe to the 'coin-prices' channel
       const prices = pusher.subscribe("coin-prices");
 
@@ -136,10 +136,9 @@ const Today = () => {
       });
       return () => {
         clearTimeout(cryptoSubscription);
-        pusher.unsubscribe("coin-prices");
       };
     }
-  }, [appKey, cluster]);
+  }, []);
 
   // Return the structured JSX with dynamic data
   return (
