@@ -118,7 +118,6 @@ const Today = () => {
       const pusher = new Pusher(appKey, {
         cluster: cluster,
       });
-      console.log(pusher.channel("coin-prices"));
       // Subscribe to the 'coin-prices' channel
       const prices = pusher.subscribe("coin-prices");
 
@@ -136,6 +135,7 @@ const Today = () => {
       });
       return () => {
         clearTimeout(cryptoSubscription);
+        pusher.unsubscribe("coin-prices");
       };
     }
   }, []);
