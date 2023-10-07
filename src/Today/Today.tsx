@@ -135,6 +135,7 @@ const Today = () => {
       });
       return () => {
         clearTimeout(cryptoSubscription);
+        console.log("UNSUBBING");
         pusher.unsubscribe("coin-prices");
       };
     }
