@@ -1,25 +1,82 @@
-import { useState, useEffect } from "react";
-import "./Today.css";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import Pusher from "pusher-js";
-import useStatus from "../hooks/useStatus";
-import { LoadingState, ErrorState, EmptyState, Results } from "../Results";
 import { format } from "date-fns";
-import { getPriceMulti } from "../cryptoService";
-import { AUDollarFormatter } from "../utils";
 import { enAU } from "date-fns/locale";
+import { getPriceMulti } from "../cryptoService";
+import { formatCurrency, COIN_META, COIN_ICONS } from "../utils";
+import useStatus from "../hooks/useStatus";
+import { LoadingState, ErrorState, EmptyState } from "../Results";
 
-const cluster = process.env.REACT_APP_PUSHER_CLUSTER;
-const appKey = process.env.REACT_APP_PUSHER_KEY;
-const pusherApi = process.env.REACT_APP_PUSHER_API;
-const Today = () => {
-  // initialise default state values and setters for prices
+const cluster = import.meta.env.VITE_PUSHER_CLUSTER;
+const appKey = import.meta.env.VITE_PUSHER_KEY;
+const pusherApi = import.meta.env.VITE_PUSHER_API;
+
+interface TodayProps {
+  currency: Currency;
+}
+
+const allCoinKeys: CoinKey[] = ["BTC", "ETH", "XRP"];
+
+const CoinCard = ({
+  coinKey,
+  price,
+  rawValue,
+  currency,
+}: {
+  coinKey: CoinKey;
+  price: string;
+  rawValue?: number;
+  currency: Currency;
+}) => {
+  const meta = COIN_META[coinKey];
+  const icon = COIN_ICONS[coinKey];
+
+  return (
+    <div className="coin-card animate-fade-in">
+      <div className="flex items-center justify-between">
+        <div className={`w-10 h-10 rounded-full ${meta.bgClass} flex items-center justify-center text-lg font-bold ${meta.textClass}`}>
+          {icon}
+        </div>
+        <span className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+          {coinKey}
+        </span>
+      </div>
+      <div>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">{meta.name}</p>
+        <p className="text-xl font-bold text-slate-900 dark:text-slate-100 tabular-nums">
+          {price}
+        </p>
+        <p className="text-xs text-slate-400 dark:text-slate-500">{currency} price</p>
+      </div>
+    </div>
+  );
+};
+
+const Today = ({ currency }: TodayProps) => {
   const [todayPrice, setTodayPrice] = useState<ITodayCurrencyPriceData>();
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string>();
   const { Status, setStatus } = useStatus("loading");
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
 
-  // This function posts the price data to our server that updates our pusher
-  // channel that we then create a subscription to.
+  const saveStateToLocalStorage = (today: ITodayCurrencyPriceData) => {
+    localStorage.setItem("today-state", JSON.stringify(today));
+  };
+
+  const restoreStateFromLocalStorage = () => {
+    const saved = localStorage.getItem("today-state");
+    if (saved) {
+      setTodayPrice(JSON.parse(saved));
+      setStatus("success");
+    } else {
+      setStatus("empty");
+    }
+  };
+
+  const getCurrentTimeString = () =>
+    format(new Date(), "HH:mm", { locale: enAU });
+
   const sendPricePusher = (response: ITodayCurrencyPriceData) => {
     axios
       .post(`${pusherApi}/prices/new`, {
@@ -28,133 +85,148 @@ const Today = () => {
         BTC: response.BTC,
         XRP: response.XRP,
       })
-      .catch(handleError);
+      .catch((err) => console.error("Pusher post error:", err));
   };
 
-  // TODO: Reimplement proper notifications
-  // function showNotification(title: string, message: string) {
-  //   if ("Notification" in window) {
-  //     navigator.serviceWorker.ready.then((registration) => {
-  //       registration.showNotification(title, {
-  //         body: message,
-  //         tag: "notification-sample",
-  //       });
-  //     });
-  //   }
-  // }
-
-  const saveStateToLocalStorage = (today: ITodayCurrencyPriceData) => {
-    localStorage.setItem("today-state", JSON.stringify(today));
-  };
-
-  // access saved local state values and passes them to app state
-  const restoreStateFromLocalStorage = () => {
-    let todayState = localStorage.getItem("today-state");
-    if (todayState) setTodayPrice(JSON.parse(todayState));
-  };
-
-  const getCurrentTimeString = (): string =>
-    format(new Date(), "HH:mm a", { locale: enAU });
-
-  // reusable api call success callback
   const handleSuccess = (response: ITodayCurrencyPriceData) => {
     if (response && (response.ETH || response.BTC || response.XRP)) {
-      let eth = response?.ETH || todayPrice?.ETH;
-      let btc = response?.BTC || todayPrice?.BTC;
-      let xrp = response?.XRP || todayPrice?.XRP;
       const today: ITodayCurrencyPriceData = {
-        date: `Price is current as of: ${getCurrentTimeString()}`,
-        ETH: eth ? eth : "error",
-        BTC: btc ? btc : "error",
-        XRP: xrp ? xrp : "error",
+        date: getCurrentTimeString(),
+        ETH: response.ETH || todayPrice?.ETH || "—",
+        BTC: response.BTC || todayPrice?.BTC || "—",
+        XRP: response.XRP || todayPrice?.XRP || "—",
+        ETH_raw: response.ETH_raw,
+        BTC_raw: response.BTC_raw,
+        XRP_raw: response.XRP_raw,
       };
       saveStateToLocalStorage(today);
       setTodayPrice(today);
+      setLastUpdated(getCurrentTimeString());
       setStatus("success");
     } else {
       setStatus("error");
     }
   };
 
-  // reusable promise error callback
-  const handleError = (error: string) => {
-    setError(error);
+  const handleError = (err: unknown) => {
+    setError(String(err));
     setStatus("error");
   };
 
-  // function that calls the api and handles the response with default callback
-  // Can be passed custom response callback for passing the data to our Pusher channel
   const fetchResults = (callback = handleSuccess, statusChange = true) => {
-    if (statusChange) {
-      setStatus("loading");
-    }
-    getPriceMulti(["BTC", "ETH", "XRP"], ["AUD"])
+    if (statusChange) setStatus("loading");
+    getPriceMulti(["BTC", "ETH", "XRP"], [currency])
       .then((res) => {
-        let eth = res?.ETH?.AUD || todayPrice?.ETH;
-        let btc = res?.BTC?.AUD || todayPrice?.BTC;
-        let xrp = res?.XRP?.AUD || todayPrice?.XRP;
-        let data: ITodayCurrencyPriceData = {
-          date: `Price is current as of: ${getCurrentTimeString()}`,
-          ETH: eth ? AUDollarFormatter.format(parseFloat(eth)) : "error",
-          BTC: btc ? AUDollarFormatter.format(parseFloat(btc)) : "error",
-          XRP: xrp ? AUDollarFormatter.format(parseFloat(xrp)) : "error",
+        const eth = res?.ETH?.[currency as keyof typeof res.ETH] ?? res?.ETH?.AUD;
+        const btc = res?.BTC?.[currency as keyof typeof res.BTC] ?? res?.BTC?.AUD;
+        const xrp = res?.XRP?.[currency as keyof typeof res.XRP] ?? res?.XRP?.AUD;
+
+        const data: ITodayCurrencyPriceData = {
+          date: getCurrentTimeString(),
+          ETH: eth ? formatCurrency(parseFloat(eth), currency) : "—",
+          BTC: btc ? formatCurrency(parseFloat(btc), currency) : "—",
+          XRP: xrp ? formatCurrency(parseFloat(xrp), currency) : "—",
+          ETH_raw: eth ? parseFloat(eth) : undefined,
+          BTC_raw: btc ? parseFloat(btc) : undefined,
+          XRP_raw: xrp ? parseFloat(xrp) : undefined,
         };
         callback(data);
       })
       .catch(handleError);
-    return setTimeout(() => {
-      fetchResults(sendPricePusher);
-    }, 60000);
+
+    timerRef.current = setTimeout(() => fetchResults(sendPricePusher), 60000);
   };
 
-  // This is called on render and rerender. Use Status hook needs to be implemented.
   useEffect(() => {
-    let online = window.navigator.onLine;
-    if (!online) {
-      return restoreStateFromLocalStorage();
+    if (!window.navigator.onLine) {
+      restoreStateFromLocalStorage();
+      return;
     }
+
     if (appKey && cluster) {
-      // establish a connection to Pusher
       const pusher = new Pusher(appKey, {
-        cluster: cluster,
+        cluster,
         forceTLS: true,
         enabledTransports: ["ws", "wss", "xhr_polling"],
       });
-      // Subscribe to the 'coin-prices' channel
+
       const prices = pusher.subscribe("coin-prices");
-      // Make the initial call to our api
-      const cryptoSubscription = fetchResults();
-      pusher.connection.bind("error", function (error: string) {
-        console.error("connection error", error);
+      fetchResults();
+
+      pusher.connection.bind("error", (err: unknown) => {
+        console.error("Pusher connection error:", err);
       });
 
       prices.bind("prices", (data: ITodayCurrencyPriceData) => {
-        // When the pusher channel broadcasts an update we bind that data to our price state.
         handleSuccess(data);
-        // Notification.requestPermission((result) => {
-        //   if (result === "granted") {
-        //     showNotification("Price Update!", "Check the new live prices.");
-        //   }
-        // });
       });
+
       return () => {
-        clearTimeout(cryptoSubscription);
+        clearTimeout(timerRef.current);
         pusher.unsubscribe("coin-prices");
       };
+    } else {
+      // No Pusher config — just fetch once
+      fetchResults();
+      return () => clearTimeout(timerRef.current);
     }
-  }, []);
+  }, [currency]);
 
-  // Return the structured JSX with dynamic data
   return (
-    <div className="today-section-container">
-      <h2>Live Prices</h2>
+    <section>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse-slow"></span>
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+            Live Prices
+          </h2>
+        </div>
+        {lastUpdated && (
+          <p className="text-xs text-slate-400 dark:text-slate-500">
+            Updated {lastUpdated}
+          </p>
+        )}
+      </div>
+
       <Status
-        loading={<LoadingState />}
+        loading={
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {allCoinKeys.map((k) => (
+              <div key={k} className="card p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="skeleton w-10 h-10 rounded-full"></div>
+                  <div className="skeleton w-8 h-4 rounded"></div>
+                </div>
+                <div className="space-y-2">
+                  <div className="skeleton w-16 h-3 rounded"></div>
+                  <div className="skeleton w-32 h-7 rounded"></div>
+                  <div className="skeleton w-20 h-3 rounded"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        }
         empty={<EmptyState />}
-        error={<ErrorState error={error} retry={fetchResults} />}
-        success={todayPrice ? <Results results={todayPrice} /> : <></>}
+        error={<ErrorState error={error} retry={() => fetchResults()} />}
+        success={
+          todayPrice ? (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {allCoinKeys.map((key) => (
+                <CoinCard
+                  key={key}
+                  coinKey={key}
+                  price={todayPrice[key]}
+                  rawValue={todayPrice[`${key}_raw` as keyof ITodayCurrencyPriceData] as number | undefined}
+                  currency={currency}
+                />
+              ))}
+            </div>
+          ) : (
+            <></>
+          )
+        }
       />
-    </div>
+    </section>
   );
 };
 

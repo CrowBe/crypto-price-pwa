@@ -23,7 +23,7 @@ export const getPriceHistorical = async (
 
 export const getPriceHistoricalDays = async (
   fsym: CoinKey,
-  tsym: "AUD" | "USD" = "AUD",
+  tsym: Currency = "AUD",
   limit: number = 10
 ): Promise<{ Data: IHistoricalPriceData[] }> =>
   (await cryptoCompareClient.get("histoday", { params: { fsym, tsym, limit } }))

@@ -1,106 +1,301 @@
 import { useCallback, useEffect, useState } from "react";
-import "./History.css";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  CartesianGrid,
+} from "recharts";
 import { getPriceHistoricalDays } from "../cryptoService";
 import { format, fromUnixTime } from "date-fns";
-import { EmptyState, ErrorState, LoadingState, Results } from "../Results";
-import { AUDollarFormatter } from "../utils";
+import { ErrorState, LoadingState, EmptyState } from "../Results";
+import { formatCurrency, COIN_META } from "../utils";
 import useStatus from "../hooks/useStatus";
 
-const History = () => {
-  const [numDays, setNumDays] = useState<number>(2);
-  const [historicalData, setHistoricalData] = useState<{
-    [key: string]: ITodayCurrencyPriceData;
-  }>();
+interface HistoryProps {
+  currency: Currency;
+}
+
+interface ChartDataPoint {
+  date: string;
+  BTC: number;
+  ETH: number;
+  XRP: number;
+}
+
+const allCoinKeys: CoinKey[] = ["BTC", "ETH", "XRP"];
+
+const MIN_DAYS = 2;
+const MAX_DAYS = 30;
+
+const History = ({ currency }: HistoryProps) => {
+  const [numDays, setNumDays] = useState<number>(7);
+  const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [error, setError] = useState<string>("");
+  const [activeView, setActiveView] = useState<"chart" | "table">("chart");
   const { Status, setStatus } = useStatus("loading");
+
   const adjustNumDays = (direction: "decrement" | "increment") => {
-    if (direction === "decrement" && numDays > 1) {
-      setNumDays(numDays - 1);
-    } else if (direction === "increment" && numDays < 10) {
-      setNumDays(numDays + 1);
-    } else {
-      alert("Cannot set the number of days to be less than 1 or more than 10");
-    }
+    setNumDays((prev) => {
+      if (direction === "decrement" && prev > MIN_DAYS) return prev - 1;
+      if (direction === "increment" && prev < MAX_DAYS) return prev + 1;
+      return prev;
+    });
   };
 
   const restoreStateFromLocalStorage = useCallback(() => {
-    let temp: { [key: string]: ITodayCurrencyPriceData } = {};
-    for (let i = 0; i < numDays; i++) {
-      let dayState: string | null = localStorage.getItem(`day-state-${i + 1}`);
-      if (dayState) {
-        let dayObj = JSON.parse(dayState);
-        if (dayObj.date) {
-          temp[dayObj.date] = dayObj;
-        }
-      }
+    const saved = localStorage.getItem(`history-chart-${numDays}`);
+    if (saved) {
+      setChartData(JSON.parse(saved));
+      setStatus("success");
+    } else {
+      setStatus("empty");
     }
-    setHistoricalData(temp);
-  }, [numDays]);
-
-  const fetchDays = useCallback(() => {
-    setStatus("loading");
-    getPriceHistoricalDays("BTC", "AUD", numDays)
-      .then((btcRes) => {
-        let btc = [...btcRes.Data];
-        getPriceHistoricalDays("ETH", "AUD", numDays).then((ethRes) => {
-          let eth = [...ethRes.Data];
-          getPriceHistoricalDays("XRP", "AUD", numDays).then((xrpRes) => {
-            let xrp = [...xrpRes.Data];
-            let temp: { [key: string]: ITodayCurrencyPriceData } = {};
-            for (let i = numDays - 1; i >= 0; i--) {
-              let dateKey = format(fromUnixTime(btc[i].time), "dd-MM-yy");
-              temp[dateKey] = {
-                date: format(fromUnixTime(btc[i].time), "MMM do yy"),
-                BTC: AUDollarFormatter.format(btc[i].close),
-                ETH: AUDollarFormatter.format(eth[i].close),
-                XRP: AUDollarFormatter.format(xrp[i].close),
-              };
-            }
-            setHistoricalData(temp);
-            setStatus("success");
-          });
-        });
-      })
-      .catch((err) => {
-        setError(err);
-        setStatus("error");
-      });
   }, [numDays, setStatus]);
 
+  const fetchDays = useCallback(async () => {
+    setStatus("loading");
+    try {
+      const [btcRes, ethRes, xrpRes] = await Promise.all([
+        getPriceHistoricalDays("BTC", currency, numDays),
+        getPriceHistoricalDays("ETH", currency, numDays),
+        getPriceHistoricalDays("XRP", currency, numDays),
+      ]);
+
+      const btc = btcRes.Data;
+      const eth = ethRes.Data;
+      const xrp = xrpRes.Data;
+
+      const points: ChartDataPoint[] = [];
+      for (let i = numDays - 1; i >= 0; i--) {
+        points.push({
+          date: format(fromUnixTime(btc[i].time), "MMM d"),
+          BTC: btc[i].close,
+          ETH: eth[i].close,
+          XRP: xrp[i].close,
+        });
+      }
+
+      setChartData(points);
+      localStorage.setItem(`history-chart-${numDays}`, JSON.stringify(points));
+      setStatus("success");
+    } catch (err) {
+      setError(String(err));
+      setStatus("error");
+    }
+  }, [numDays, currency, setStatus]);
+
   useEffect(() => {
-    let online = window.navigator.onLine;
-    if (!online) {
-      return restoreStateFromLocalStorage();
+    if (!window.navigator.onLine) {
+      restoreStateFromLocalStorage();
+      return;
     }
     fetchDays();
-  }, [numDays, fetchDays, restoreStateFromLocalStorage]);
+  }, [numDays, currency, fetchDays, restoreStateFromLocalStorage]);
+
+  const formatTooltipValue = (value: number, name: string) => [
+    formatCurrency(value, currency),
+    COIN_META[name as CoinKey]?.name ?? name,
+  ];
+
   return (
-    <div className="history-section-container">
-      <h2>Historical Data</h2>
-      {/* Add variable for n of days */}
-      <p className="section-description">
-        Daily average price for the past{" "}
-        <button onClick={() => adjustNumDays("decrement")}>-</button>
-        <em> {numDays} </em>
-        <button onClick={() => adjustNumDays("increment")}>+</button> days
-      </p>
-      <div className="days-container">
-        <Status
-          loading={<LoadingState />}
-          empty={<EmptyState />}
-          error={<ErrorState error={error} retry={fetchDays} />}
-          success={
-            <>
-              {historicalData
-                ? Object.keys(historicalData).map((day) => (
-                    <Results results={historicalData[day]} key={day} />
-                  ))
-                : null}
-            </>
-          }
-        />
+    <section>
+      {/* Section header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          Historical Data
+        </h2>
+
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Days stepper */}
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5">
+            <button
+              onClick={() => adjustNumDays("decrement")}
+              disabled={numDays <= MIN_DAYS}
+              className="w-6 h-6 flex items-center justify-center rounded text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              aria-label="Decrease days"
+            >
+              −
+            </button>
+            <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 w-16 text-center tabular-nums">
+              {numDays} days
+            </span>
+            <button
+              onClick={() => adjustNumDays("increment")}
+              disabled={numDays >= MAX_DAYS}
+              className="w-6 h-6 flex items-center justify-center rounded text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              aria-label="Increase days"
+            >
+              +
+            </button>
+          </div>
+
+          {/* View toggle */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-700 rounded-lg p-1 gap-1">
+            {(["chart", "table"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setActiveView(v)}
+                className={`px-3 py-1 rounded-md text-xs font-semibold capitalize transition-all duration-200 ${
+                  activeView === v
+                    ? "bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
-    </div>
+
+      <Status
+        loading={
+          <div className="card p-6">
+            <div className="skeleton w-full h-64 rounded-lg"></div>
+          </div>
+        }
+        empty={<EmptyState />}
+        error={<ErrorState error={error} retry={fetchDays} />}
+        success={
+          <div className="card overflow-hidden animate-fade-in">
+            {activeView === "chart" ? (
+              <div className="p-4 sm:p-6">
+                {/* BTC chart */}
+                <div className="mb-6">
+                  <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-orange-400 inline-block"></span>
+                    Bitcoin (BTC)
+                  </h3>
+                  <ResponsiveContainer width="100%" height={140}>
+                    <LineChart data={chartData} margin={{ top: 2, right: 8, bottom: 0, left: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} />
+                      <YAxis
+                        tickFormatter={(v: number) => formatCurrency(v, currency).replace(/\.\d+/, "")}
+                        tick={{ fontSize: 10, fill: "currentColor" }}
+                        tickLine={false}
+                        axisLine={false}
+                        width={80}
+                      />
+                      <Tooltip
+                        formatter={formatTooltipValue}
+                        contentStyle={{ backgroundColor: "var(--tooltip-bg, #1e293b)", border: "none", borderRadius: "8px", fontSize: "12px" }}
+                        labelStyle={{ color: "#94a3b8" }}
+                        itemStyle={{ color: "#f8fafc" }}
+                      />
+                      <Line type="monotone" dataKey="BTC" stroke="#f7931a" strokeWidth={2} dot={false} name="BTC" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* ETH chart */}
+                <div className="mb-6">
+                  <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-indigo-400 inline-block"></span>
+                    Ethereum (ETH)
+                  </h3>
+                  <ResponsiveContainer width="100%" height={140}>
+                    <LineChart data={chartData} margin={{ top: 2, right: 8, bottom: 0, left: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} />
+                      <YAxis
+                        tickFormatter={(v: number) => formatCurrency(v, currency).replace(/\.\d+/, "")}
+                        tick={{ fontSize: 10, fill: "currentColor" }}
+                        tickLine={false}
+                        axisLine={false}
+                        width={80}
+                      />
+                      <Tooltip
+                        formatter={formatTooltipValue}
+                        contentStyle={{ backgroundColor: "var(--tooltip-bg, #1e293b)", border: "none", borderRadius: "8px", fontSize: "12px" }}
+                        labelStyle={{ color: "#94a3b8" }}
+                        itemStyle={{ color: "#f8fafc" }}
+                      />
+                      <Line type="monotone" dataKey="ETH" stroke="#627eea" strokeWidth={2} dot={false} name="ETH" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* XRP chart */}
+                <div>
+                  <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-blue-400 inline-block"></span>
+                    XRP
+                  </h3>
+                  <ResponsiveContainer width="100%" height={140}>
+                    <LineChart data={chartData} margin={{ top: 2, right: 8, bottom: 0, left: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} />
+                      <YAxis
+                        tickFormatter={(v: number) => formatCurrency(v, currency).replace(/\.\d+/, "")}
+                        tick={{ fontSize: 10, fill: "currentColor" }}
+                        tickLine={false}
+                        axisLine={false}
+                        width={80}
+                      />
+                      <Tooltip
+                        formatter={formatTooltipValue}
+                        contentStyle={{ backgroundColor: "var(--tooltip-bg, #1e293b)", border: "none", borderRadius: "8px", fontSize: "12px" }}
+                        labelStyle={{ color: "#94a3b8" }}
+                        itemStyle={{ color: "#f8fafc" }}
+                      />
+                      <Line type="monotone" dataKey="XRP" stroke="#346aa9" strokeWidth={2} dot={false} name="XRP" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            ) : (
+              /* Table view */
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 dark:border-slate-700">
+                      <th className="text-left px-4 py-3 text-slate-500 dark:text-slate-400 font-medium">
+                        Date
+                      </th>
+                      {allCoinKeys.map((key) => (
+                        <th
+                          key={key}
+                          className={`text-right px-4 py-3 font-medium ${COIN_META[key].textClass}`}
+                        >
+                          {COIN_META[key].name}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {chartData.map((row, i) => (
+                      <tr
+                        key={row.date}
+                        className={`border-b border-slate-100 dark:border-slate-700/50 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/30 ${
+                          i === 0 ? "font-medium" : ""
+                        }`}
+                      >
+                        <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
+                          {row.date}
+                        </td>
+                        {allCoinKeys.map((key) => (
+                          <td
+                            key={key}
+                            className="px-4 py-3 text-right text-slate-900 dark:text-slate-100 tabular-nums"
+                          >
+                            {formatCurrency(row[key], currency)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        }
+      />
+    </section>
   );
 };
 

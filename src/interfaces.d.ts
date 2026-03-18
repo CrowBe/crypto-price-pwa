@@ -1,13 +1,13 @@
 type TLoadingState = "error" | "loading" | "empty" | "success";
+type Currency = "AUD" | "USD";
+
 const allCoinKeys = ["ETH", "BTC", "XRP"] as const;
 type CoinKey = (typeof allCoinKeys)[number];
+
 interface IPriceData {
-  ETH?: { AUD: string };
-  BTC?: { AUD: string };
-  XRP?: { AUD: string };
-}
-interface ITodayPriceData extends IPriceData {
-  date: string;
+  ETH?: { AUD: string; USD?: string };
+  BTC?: { AUD: string; USD?: string };
+  XRP?: { AUD: string; USD?: string };
 }
 
 interface ICurrencyPriceData {
@@ -18,6 +18,10 @@ interface ICurrencyPriceData {
 
 interface ITodayCurrencyPriceData extends ICurrencyPriceData {
   date: string;
+  /** Raw numeric values for trend calculations */
+  ETH_raw?: number;
+  BTC_raw?: number;
+  XRP_raw?: number;
 }
 
 interface IHistoricalPriceData {
@@ -30,4 +34,12 @@ interface IHistoricalPriceData {
   close: number;
   conversionType: "direct";
   conversionSymbol: "";
+}
+
+interface ICoinMeta {
+  symbol: CoinKey;
+  name: string;
+  color: string;
+  bgClass: string;
+  textClass: string;
 }
