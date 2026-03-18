@@ -1,6 +1,6 @@
 # Easy Crypto Tracking — PWA
 
-Real-time cryptocurrency price tracker for **Bitcoin (BTC)**, **Ethereum (ETH)**, and **XRP**, displayed in AUD or USD. Built as a Progressive Web App (PWA) — installable on mobile and desktop, works offline via cached data.
+Real-time cryptocurrency price tracker for **BTC, ETH, XRP, SOL, DOGE, ADA & LTC**, displayed in AUD, USD, EUR or GBP. Built as a Progressive Web App (PWA) — installable on mobile and desktop, works offline via cached data.
 
 ---
 
@@ -8,8 +8,8 @@ Real-time cryptocurrency price tracker for **Bitcoin (BTC)**, **Ethereum (ETH)**
 
 | Layer | Technology |
 |-------|-----------|
-| Build | **Vite** (migrated from Create React App) |
-| UI Framework | **React 18** + **TypeScript 5** |
+| Build | **Vite 6** |
+| UI Framework | **React 18** + **TypeScript 5** (strict mode) |
 | Styling | **Tailwind CSS v3** with dark mode |
 | Charts | **Recharts** |
 | Real-time | **Pusher Channels** |
@@ -17,17 +17,19 @@ Real-time cryptocurrency price tracker for **Bitcoin (BTC)**, **Ethereum (ETH)**
 | HTTP client | **Axios** |
 | Date handling | **date-fns v3** |
 | PWA | **vite-plugin-pwa** + Workbox |
+| Testing | **Vitest** + **React Testing Library** |
 
 ---
 
 ## Features
 
-- **Live prices** — BTC, ETH, XRP fetched every 60 seconds and broadcast via Pusher WebSockets
+- **Live prices** — 7 coins fetched every 60 seconds, broadcast via Pusher WebSockets
+- **Price alerts** — set above/below targets per coin; browser notifications when triggered
 - **Historical charts** — line charts for the past 2–30 days, switchable to table view
-- **AUD / USD toggle** — switch the display currency in the header
+- **4-currency toggle** — AUD, USD, EUR, GBP in the header
 - **Dark / light mode** — system preference detected, persisted to `localStorage`
 - **PWA** — installable, offline-capable (CryptoCompare responses cached via Workbox)
-- **Skeleton loaders** — smooth loading states
+- **Skeleton loaders** — smooth loading states for all async content
 - **Responsive** — mobile-first grid layout
 
 ---
@@ -54,9 +56,9 @@ npm run dev            # http://localhost:3000
 
 ```
 VITE_COIN_API_KEY=      # CryptoCompare API key
-VITE_PUSHER_KEY=        # Pusher app key
-VITE_PUSHER_CLUSTER=    # e.g. ap4
-VITE_PUSHER_API=        # URL of crypto-price-server backend
+VITE_PUSHER_KEY=        # Pusher app key (optional)
+VITE_PUSHER_CLUSTER=    # e.g. ap4 (optional)
+VITE_PUSHER_API=        # URL of crypto-price-server backend (optional)
 ```
 
 > See [crypto-price-server](https://github.com/your-org/crypto-price-server) for the Pusher broadcasting backend.
@@ -70,6 +72,9 @@ VITE_PUSHER_API=        # URL of crypto-price-server backend
 | `npm run build` | Type-check + production build |
 | `npm run preview` | Serve the production build locally |
 | `npm run lint` | TypeScript type check (no emit) |
+| `npm test` | Run test suite once |
+| `npm run test:watch` | Run tests in interactive watch mode |
+| `npm run test:coverage` | Run tests with V8 coverage report |
 
 ### Deployment
 
@@ -82,47 +87,111 @@ npm run build
 
 ---
 
+## Architecture
+
+### Source layout
+
+```
+src/
+├── types.ts                 # All shared TypeScript types (exported module)
+├── interfaces.d.ts          # Ambient re-exports for backwards compatibility
+├── api.ts                   # Axios CryptoCompare client
+├── cryptoService.ts         # API helper functions
+├── utils.ts                 # Currency formatters + coin metadata constants
+├── App.tsx                  # Root: dark-mode, currency selector, lazy History
+├── hooks/
+│   └── useStatus.tsx        # Loading-state render hook
+├── Today/
+│   └── Today.tsx            # Live price grid + Pusher/polling logic
+├── History/
+│   └── History.tsx          # Historical charts & table (lazy-loaded)
+├── PriceAlerts/
+│   └── PriceAlerts.tsx      # Alert management + Notifications API
+└── Results/
+    ├── LoadingState.tsx
+    ├── ErrorState.tsx
+    └── EmptyState.tsx
+```
+
+### Type system
+
+All shared types live in `src/types.ts` as named exports. The `interfaces.d.ts` file re-declares them as ambient globals so existing component files compile without extra imports; new code should import from `src/types` directly:
+
+```ts
+import type { CoinKey, Currency, IPriceAlert } from "../types";
+```
+
+### Real-time data flow
+
+1. `Today` component fetches prices from CryptoCompare on mount.
+2. If Pusher env vars are set, a WebSocket subscription is opened on `coin-prices`.
+3. On each Pusher `prices` event (or poll interval), prices are formatted and saved to `localStorage`.
+4. `onPriceUpdate` callback propagates raw numeric prices to `App` → `PriceAlerts` for alert checking.
+
+---
+
+## Testing
+
+Tests use [Vitest](https://vitest.dev/) as the runner and [React Testing Library](https://testing-library.com/docs/react-testing-library/intro/) for component assertions.
+
+### Running tests
+
+```bash
+npm test                 # one-shot run
+npm run test:watch       # watch mode
+npm run test:coverage    # with coverage report
+```
+
+### Test files
+
+| File | What is tested |
+|------|---------------|
+| `src/utils.test.ts` | `formatCurrency`, `sortByDateDescending`, `COIN_META`, `COIN_ICONS` |
+| `src/hooks/useStatus.test.tsx` | State transitions, correct element rendering |
+| `src/cryptoService.test.ts` | API function calls, parameter passing, error propagation |
+| `src/PriceAlerts/PriceAlerts.test.tsx` | Alert CRUD, trigger logic, localStorage persistence |
+| `src/Today/Today.test.tsx` | Loading/success/error states, offline restore, callback |
+| `src/History/History.test.tsx` | Chart/table toggle, day stepper, offline restore |
+
+### Writing new tests
+
+- Co-locate test files next to the source (e.g. `Foo.test.tsx` beside `Foo.tsx`).
+- Mock external modules with `vi.mock()`.
+- Use `@testing-library/user-event` for user interactions over raw `fireEvent`.
+
+---
+
 ## Server Updates (crypto-price-server)
 
-The companion server handles Pusher event broadcasting when the client posts fresh prices. Relevant updates aligned with this PWA modernisation:
+The companion server handles Pusher event broadcasting when the client posts fresh prices.
 
 - Environment variables follow the same naming convention (`PUSHER_*`)
-- The `/prices/new` endpoint accepts `{ BTC, ETH, XRP }` price strings and broadcasts them on the `coin-prices` Pusher channel under the `prices` event
+- The `/prices/new` endpoint accepts a price payload and broadcasts on the `coin-prices` Pusher channel under the `prices` event
 - CORS should be configured to allow the PWA's origin in production
 
 ---
 
-## Suggested Features
-
-The items below are documented here to guide future development.
-
-### High priority
-
-| Feature | Description |
-|---------|-------------|
-| **Price alerts** | Let users set a target price for any coin; trigger a browser notification when it's hit. Uses the [Notifications API](https://developer.mozilla.org/en-US/docs/Web/API/Notifications_API) — the scaffolding (commented-out `showNotification`) is already in `Today.tsx`. |
-| **More currencies** | Add `USD`, `EUR`, `GBP` as additional display options (the CryptoCompare API supports them; `tsyms` is already an array). |
-| **More coins** | Extend `CoinKey` with `SOL`, `DOGE`, `ADA`, `LTC`. CryptoCompare supports all of them via `pricemulti`. |
+## Roadmap
 
 ### Medium priority
 
 | Feature | Description |
 |---------|-------------|
-| **Portfolio tracker** | Allow users to enter coin quantities; calculate total portfolio value in real time. State stored in `localStorage`. |
-| **Percentage change** | Show 24-hour % change alongside each live price. CryptoCompare's `pricemultifull` endpoint returns `CHANGEPCT24HOUR`. |
-| **Combined chart** | Normalised (indexed to 100) multi-coin chart so BTC, ETH, and XRP can be compared on the same axis. |
+| **Portfolio tracker** | Allow users to enter coin quantities; calculate total portfolio value in real time. |
+| **Percentage change** | Show 24-hour % change alongside each live price (`pricemultifull` endpoint). |
+| **Combined chart** | Normalised multi-coin chart so all coins can be compared on the same axis. |
 | **CSV / JSON export** | Button to download the visible historical data. |
-| **Last seen offline indicator** | When loaded offline, show a banner with the timestamp of the cached data. |
+| **Offline indicator** | Banner showing the timestamp of cached data when loaded offline. |
 
 ### Lower priority / nice-to-have
 
 | Feature | Description |
 |---------|-------------|
-| **Coin search** | Allow users to search any coin supported by CryptoCompare instead of a fixed list. |
-| **Sparklines in live cards** | Small inline chart in each coin card showing the last 24 hours from the `histohour` endpoint. |
+| **Coin search** | Search any coin supported by CryptoCompare instead of a fixed list. |
+| **Sparklines** | Small inline chart in each coin card (last 24 hours from `histohour`). |
 | **Theming** | Additional accent colour themes beyond the default indigo. |
 | **i18n** | Internationalise labels and number formats for non-AU/US users. |
-| **End-to-end tests** | Playwright tests for the main user flows. |
+| **E2E tests** | Playwright tests for the main user flows. |
 
 ---
 

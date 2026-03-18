@@ -1,47 +1,28 @@
-type TLoadingState = "error" | "loading" | "empty" | "success";
-type Currency = "AUD" | "USD" | "EUR" | "GBP";
+/**
+ * Ambient type declarations - re-exported from types.ts for backwards compatibility.
+ * New code should import directly from './types'.
+ */
+export type {
+  TLoadingState,
+  Currency,
+  CoinKey,
+  IPriceData,
+  ICurrencyPriceData,
+  ITodayCurrencyPriceData,
+  IHistoricalPriceData,
+  ICoinMeta,
+  IPriceAlert,
+} from "./types";
 
-const allCoinKeys = ["BTC", "ETH", "XRP", "SOL", "DOGE", "ADA", "LTC"] as const;
-type CoinKey = (typeof allCoinKeys)[number];
-
-type IPriceData = {
-  [K in CoinKey]?: { [currency: string]: string };
-};
-
-interface ICurrencyPriceData {
-  [key: string]: string;
-}
-
-interface ITodayCurrencyPriceData {
-  date: string;
-  [key: string]: string | number | undefined;
-}
-
-interface IHistoricalPriceData {
-  time: number;
-  high: number;
-  low: number;
-  open: number;
-  volumefrom: number;
-  volumeto: number;
-  close: number;
-  conversionType: "direct";
-  conversionSymbol: "";
-}
-
-interface ICoinMeta {
-  symbol: CoinKey;
-  name: string;
-  color: string;
-  bgClass: string;
-  textClass: string;
-}
-
-interface IPriceAlert {
-  id: string;
-  coin: CoinKey;
-  targetPrice: number;
-  direction: "above" | "below";
-  currency: Currency;
-  triggered: boolean;
+// Re-declare as globals so existing files without explicit imports still type-check.
+declare global {
+  type TLoadingState = import("./types").TLoadingState;
+  type Currency = import("./types").Currency;
+  type CoinKey = import("./types").CoinKey;
+  type IPriceData = import("./types").IPriceData;
+  type ICurrencyPriceData = import("./types").ICurrencyPriceData;
+  type ITodayCurrencyPriceData = import("./types").ITodayCurrencyPriceData;
+  type IHistoricalPriceData = import("./types").IHistoricalPriceData;
+  type ICoinMeta = import("./types").ICoinMeta;
+  type IPriceAlert = import("./types").IPriceAlert;
 }

@@ -75,12 +75,15 @@ const Today = ({ currency, onPriceUpdate }: TodayProps) => {
     format(new Date(), "HH:mm", { locale: enAU });
 
   const sendPricePusher = (response: ITodayCurrencyPriceData) => {
-    const payload: Record<string, string> = {};
+    // Build payload from the fresh response only – avoids stale closure over todayPrice state.
+    const payload: Record<string, string | number | undefined> = {
+      date: response.date,
+    };
     ALL_COIN_KEYS.forEach((key) => {
-      if (response[key]) payload[key] = response[key] as string;
+      if (response[key]) payload[key] = response[key];
     });
     axios
-      .post(`${pusherApi}/prices/new`, { ...todayPrice, ...payload })
+      .post(`${pusherApi}/prices/new`, payload)
       .catch((err) => console.error("Pusher post error:", err));
   };
 
