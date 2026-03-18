@@ -4,7 +4,7 @@ import Pusher from "pusher-js";
 import { format } from "date-fns";
 import { enAU } from "date-fns/locale";
 import { getPriceMulti } from "../cryptoService";
-import { formatCurrency, COIN_META, COIN_ICONS } from "../utils";
+import { formatCurrency, COIN_META, COIN_ICONS, ALL_COIN_KEYS } from "../utils";
 import useStatus from "../hooks/useStatus";
 import { LoadingState, ErrorState, EmptyState } from "../Results";
 
@@ -14,19 +14,16 @@ const pusherApi = import.meta.env.VITE_PUSHER_API;
 
 interface TodayProps {
   currency: Currency;
+  onPriceUpdate?: (prices: Record<CoinKey, number>) => void;
 }
-
-const allCoinKeys: CoinKey[] = ["BTC", "ETH", "XRP"];
 
 const CoinCard = ({
   coinKey,
   price,
-  rawValue,
   currency,
 }: {
   coinKey: CoinKey;
   price: string;
-  rawValue?: number;
   currency: Currency;
 }) => {
   const meta = COIN_META[coinKey];
@@ -53,7 +50,7 @@ const CoinCard = ({
   );
 };
 
-const Today = ({ currency }: TodayProps) => {
+const Today = ({ currency, onPriceUpdate }: TodayProps) => {
   const [todayPrice, setTodayPrice] = useState<ITodayCurrencyPriceData>();
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>();
@@ -78,31 +75,37 @@ const Today = ({ currency }: TodayProps) => {
     format(new Date(), "HH:mm", { locale: enAU });
 
   const sendPricePusher = (response: ITodayCurrencyPriceData) => {
+    const payload: Record<string, string> = {};
+    ALL_COIN_KEYS.forEach((key) => {
+      if (response[key]) payload[key] = response[key] as string;
+    });
     axios
-      .post(`${pusherApi}/prices/new`, {
-        ...todayPrice,
-        ETH: response.ETH,
-        BTC: response.BTC,
-        XRP: response.XRP,
-      })
+      .post(`${pusherApi}/prices/new`, { ...todayPrice, ...payload })
       .catch((err) => console.error("Pusher post error:", err));
   };
 
   const handleSuccess = (response: ITodayCurrencyPriceData) => {
-    if (response && (response.ETH || response.BTC || response.XRP)) {
-      const today: ITodayCurrencyPriceData = {
-        date: getCurrentTimeString(),
-        ETH: response.ETH || todayPrice?.ETH || "—",
-        BTC: response.BTC || todayPrice?.BTC || "—",
-        XRP: response.XRP || todayPrice?.XRP || "—",
-        ETH_raw: response.ETH_raw,
-        BTC_raw: response.BTC_raw,
-        XRP_raw: response.XRP_raw,
-      };
+    const hasAnyPrice = ALL_COIN_KEYS.some((key) => response[key]);
+    if (response && hasAnyPrice) {
+      const today: ITodayCurrencyPriceData = { date: getCurrentTimeString() };
+      ALL_COIN_KEYS.forEach((key) => {
+        today[key] = response[key] || todayPrice?.[key] || "—";
+        today[`${key}_raw`] = response[`${key}_raw`];
+      });
       saveStateToLocalStorage(today);
       setTodayPrice(today);
       setLastUpdated(getCurrentTimeString());
       setStatus("success");
+
+      // Notify parent with raw numeric prices for alert checking
+      if (onPriceUpdate) {
+        const rawPrices: Partial<Record<CoinKey, number>> = {};
+        ALL_COIN_KEYS.forEach((key) => {
+          const raw = response[`${key}_raw`];
+          if (typeof raw === "number") rawPrices[key] = raw;
+        });
+        onPriceUpdate(rawPrices as Record<CoinKey, number>);
+      }
     } else {
       setStatus("error");
     }
@@ -115,21 +118,15 @@ const Today = ({ currency }: TodayProps) => {
 
   const fetchResults = (callback = handleSuccess, statusChange = true) => {
     if (statusChange) setStatus("loading");
-    getPriceMulti(["BTC", "ETH", "XRP"], [currency])
+    getPriceMulti(ALL_COIN_KEYS, [currency])
       .then((res) => {
-        const eth = res?.ETH?.[currency as keyof typeof res.ETH] ?? res?.ETH?.AUD;
-        const btc = res?.BTC?.[currency as keyof typeof res.BTC] ?? res?.BTC?.AUD;
-        const xrp = res?.XRP?.[currency as keyof typeof res.XRP] ?? res?.XRP?.AUD;
-
-        const data: ITodayCurrencyPriceData = {
-          date: getCurrentTimeString(),
-          ETH: eth ? formatCurrency(parseFloat(eth), currency) : "—",
-          BTC: btc ? formatCurrency(parseFloat(btc), currency) : "—",
-          XRP: xrp ? formatCurrency(parseFloat(xrp), currency) : "—",
-          ETH_raw: eth ? parseFloat(eth) : undefined,
-          BTC_raw: btc ? parseFloat(btc) : undefined,
-          XRP_raw: xrp ? parseFloat(xrp) : undefined,
-        };
+        const data: ITodayCurrencyPriceData = { date: getCurrentTimeString() };
+        ALL_COIN_KEYS.forEach((key) => {
+          const coinData = res[key];
+          const rawStr = coinData?.[currency] ?? coinData?.["AUD"];
+          data[key] = rawStr ? formatCurrency(parseFloat(rawStr), currency) : "—";
+          data[`${key}_raw`] = rawStr ? parseFloat(rawStr) : undefined;
+        });
         callback(data);
       })
       .catch(handleError);
@@ -166,7 +163,6 @@ const Today = ({ currency }: TodayProps) => {
         pusher.unsubscribe("coin-prices");
       };
     } else {
-      // No Pusher config — just fetch once
       fetchResults();
       return () => clearTimeout(timerRef.current);
     }
@@ -190,8 +186,8 @@ const Today = ({ currency }: TodayProps) => {
 
       <Status
         loading={
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {allCoinKeys.map((k) => (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {ALL_COIN_KEYS.map((k) => (
               <div key={k} className="card p-5 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="skeleton w-10 h-10 rounded-full"></div>
@@ -210,13 +206,12 @@ const Today = ({ currency }: TodayProps) => {
         error={<ErrorState error={error} retry={() => fetchResults()} />}
         success={
           todayPrice ? (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {allCoinKeys.map((key) => (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {ALL_COIN_KEYS.map((key) => (
                 <CoinCard
                   key={key}
                   coinKey={key}
-                  price={todayPrice[key]}
-                  rawValue={todayPrice[`${key}_raw` as keyof ITodayCurrencyPriceData] as number | undefined}
+                  price={todayPrice[key] as string || "—"}
                   currency={currency}
                 />
               ))}
