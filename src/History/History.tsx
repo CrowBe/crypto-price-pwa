@@ -6,13 +6,12 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  Legend,
   CartesianGrid,
 } from "recharts";
 import { getPriceHistoricalDays } from "../cryptoService";
 import { format, fromUnixTime } from "date-fns";
 import { ErrorState, LoadingState, EmptyState } from "../Results";
-import { formatCurrency, COIN_META } from "../utils";
+import { formatCurrency, COIN_META, ALL_COIN_KEYS } from "../utils";
 import useStatus from "../hooks/useStatus";
 
 interface HistoryProps {
@@ -21,12 +20,8 @@ interface HistoryProps {
 
 interface ChartDataPoint {
   date: string;
-  BTC: number;
-  ETH: number;
-  XRP: number;
+  [key: string]: string | number;
 }
-
-const allCoinKeys: CoinKey[] = ["BTC", "ETH", "XRP"];
 
 const MIN_DAYS = 2;
 const MAX_DAYS = 30;
@@ -59,24 +54,20 @@ const History = ({ currency }: HistoryProps) => {
   const fetchDays = useCallback(async () => {
     setStatus("loading");
     try {
-      const [btcRes, ethRes, xrpRes] = await Promise.all([
-        getPriceHistoricalDays("BTC", currency, numDays),
-        getPriceHistoricalDays("ETH", currency, numDays),
-        getPriceHistoricalDays("XRP", currency, numDays),
-      ]);
-
-      const btc = btcRes.Data;
-      const eth = ethRes.Data;
-      const xrp = xrpRes.Data;
+      const results = await Promise.all(
+        ALL_COIN_KEYS.map((coin) => getPriceHistoricalDays(coin, currency, numDays))
+      );
 
       const points: ChartDataPoint[] = [];
+      const firstCoinData = results[0].Data;
       for (let i = numDays - 1; i >= 0; i--) {
-        points.push({
-          date: format(fromUnixTime(btc[i].time), "MMM d"),
-          BTC: btc[i].close,
-          ETH: eth[i].close,
-          XRP: xrp[i].close,
+        const point: ChartDataPoint = {
+          date: format(fromUnixTime(firstCoinData[i].time), "MMM d"),
+        };
+        ALL_COIN_KEYS.forEach((coin, idx) => {
+          point[coin] = results[idx].Data[i].close;
         });
+        points.push(point);
       }
 
       setChartData(points);
@@ -163,90 +154,41 @@ const History = ({ currency }: HistoryProps) => {
         success={
           <div className="card overflow-hidden animate-fade-in">
             {activeView === "chart" ? (
-              <div className="p-4 sm:p-6">
-                {/* BTC chart */}
-                <div className="mb-6">
-                  <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-orange-400 inline-block"></span>
-                    Bitcoin (BTC)
-                  </h3>
-                  <ResponsiveContainer width="100%" height={140}>
-                    <LineChart data={chartData} margin={{ top: 2, right: 8, bottom: 0, left: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
-                      <XAxis dataKey="date" tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} />
-                      <YAxis
-                        tickFormatter={(v: number) => formatCurrency(v, currency).replace(/\.\d+/, "")}
-                        tick={{ fontSize: 10, fill: "currentColor" }}
-                        tickLine={false}
-                        axisLine={false}
-                        width={80}
-                      />
-                      <Tooltip
-                        formatter={formatTooltipValue}
-                        contentStyle={{ backgroundColor: "var(--tooltip-bg, #1e293b)", border: "none", borderRadius: "8px", fontSize: "12px" }}
-                        labelStyle={{ color: "#94a3b8" }}
-                        itemStyle={{ color: "#f8fafc" }}
-                      />
-                      <Line type="monotone" dataKey="BTC" stroke="#f7931a" strokeWidth={2} dot={false} name="BTC" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-
-                {/* ETH chart */}
-                <div className="mb-6">
-                  <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-indigo-400 inline-block"></span>
-                    Ethereum (ETH)
-                  </h3>
-                  <ResponsiveContainer width="100%" height={140}>
-                    <LineChart data={chartData} margin={{ top: 2, right: 8, bottom: 0, left: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
-                      <XAxis dataKey="date" tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} />
-                      <YAxis
-                        tickFormatter={(v: number) => formatCurrency(v, currency).replace(/\.\d+/, "")}
-                        tick={{ fontSize: 10, fill: "currentColor" }}
-                        tickLine={false}
-                        axisLine={false}
-                        width={80}
-                      />
-                      <Tooltip
-                        formatter={formatTooltipValue}
-                        contentStyle={{ backgroundColor: "var(--tooltip-bg, #1e293b)", border: "none", borderRadius: "8px", fontSize: "12px" }}
-                        labelStyle={{ color: "#94a3b8" }}
-                        itemStyle={{ color: "#f8fafc" }}
-                      />
-                      <Line type="monotone" dataKey="ETH" stroke="#627eea" strokeWidth={2} dot={false} name="ETH" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-
-                {/* XRP chart */}
-                <div>
-                  <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-blue-400 inline-block"></span>
-                    XRP
-                  </h3>
-                  <ResponsiveContainer width="100%" height={140}>
-                    <LineChart data={chartData} margin={{ top: 2, right: 8, bottom: 0, left: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
-                      <XAxis dataKey="date" tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} />
-                      <YAxis
-                        tickFormatter={(v: number) => formatCurrency(v, currency).replace(/\.\d+/, "")}
-                        tick={{ fontSize: 10, fill: "currentColor" }}
-                        tickLine={false}
-                        axisLine={false}
-                        width={80}
-                      />
-                      <Tooltip
-                        formatter={formatTooltipValue}
-                        contentStyle={{ backgroundColor: "var(--tooltip-bg, #1e293b)", border: "none", borderRadius: "8px", fontSize: "12px" }}
-                        labelStyle={{ color: "#94a3b8" }}
-                        itemStyle={{ color: "#f8fafc" }}
-                      />
-                      <Line type="monotone" dataKey="XRP" stroke="#346aa9" strokeWidth={2} dot={false} name="XRP" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
+              <div className="p-4 sm:p-6 space-y-6">
+                {ALL_COIN_KEYS.map((coin) => {
+                  const meta = COIN_META[coin];
+                  return (
+                    <div key={coin}>
+                      <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-2">
+                        <span
+                          className="w-3 h-3 rounded-full inline-block"
+                          style={{ backgroundColor: meta.color }}
+                        ></span>
+                        {meta.name} ({coin})
+                      </h3>
+                      <ResponsiveContainer width="100%" height={140}>
+                        <LineChart data={chartData} margin={{ top: 2, right: 8, bottom: 0, left: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
+                          <XAxis dataKey="date" tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} />
+                          <YAxis
+                            tickFormatter={(v: number) => formatCurrency(v, currency).replace(/\.\d+/, "")}
+                            tick={{ fontSize: 10, fill: "currentColor" }}
+                            tickLine={false}
+                            axisLine={false}
+                            width={80}
+                          />
+                          <Tooltip
+                            formatter={formatTooltipValue}
+                            contentStyle={{ backgroundColor: "var(--tooltip-bg, #1e293b)", border: "none", borderRadius: "8px", fontSize: "12px" }}
+                            labelStyle={{ color: "#94a3b8" }}
+                            itemStyle={{ color: "#f8fafc" }}
+                          />
+                          <Line type="monotone" dataKey={coin} stroke={meta.color} strokeWidth={2} dot={false} name={coin} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               /* Table view */
@@ -257,7 +199,7 @@ const History = ({ currency }: HistoryProps) => {
                       <th className="text-left px-4 py-3 text-slate-500 dark:text-slate-400 font-medium">
                         Date
                       </th>
-                      {allCoinKeys.map((key) => (
+                      {ALL_COIN_KEYS.map((key) => (
                         <th
                           key={key}
                           className={`text-right px-4 py-3 font-medium ${COIN_META[key].textClass}`}
@@ -278,12 +220,12 @@ const History = ({ currency }: HistoryProps) => {
                         <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
                           {row.date}
                         </td>
-                        {allCoinKeys.map((key) => (
+                        {ALL_COIN_KEYS.map((key) => (
                           <td
                             key={key}
                             className="px-4 py-3 text-right text-slate-900 dark:text-slate-100 tabular-nums"
                           >
-                            {formatCurrency(row[key], currency)}
+                            {formatCurrency(row[key] as number, currency)}
                           </td>
                         ))}
                       </tr>

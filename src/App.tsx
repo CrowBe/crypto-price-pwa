@@ -1,5 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import Today from "./Today/Today";
+import PriceAlerts from "./PriceAlerts/PriceAlerts";
 const History = lazy(() => import("./History/History"));
 
 function App() {
@@ -12,6 +13,8 @@ function App() {
   const [currency, setCurrency] = useState<Currency>(() => {
     return (localStorage.getItem("currency") as Currency) || "AUD";
   });
+
+  const [livePrices, setLivePrices] = useState<Record<CoinKey, number>>({} as Record<CoinKey, number>);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -42,7 +45,7 @@ function App() {
           <div className="flex items-center gap-2">
             {/* Currency toggle */}
             <div className="flex items-center bg-slate-100 dark:bg-slate-700 rounded-lg p-1 gap-1">
-              {(["AUD", "USD"] as Currency[]).map((c) => (
+              {(["AUD", "USD", "EUR", "GBP"] as Currency[]).map((c) => (
                 <button
                   key={c}
                   onClick={() => setCurrency(c)}
@@ -81,11 +84,12 @@ function App() {
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6 space-y-6">
         <div className="text-center">
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Live prices for Bitcoin, Ethereum &amp; XRP &mdash; updated every 60 seconds via Pusher
+            Live prices for BTC, ETH, XRP, SOL, DOGE, ADA &amp; LTC &mdash; updated every 60 seconds via Pusher
           </p>
         </div>
 
-        <Today currency={currency} />
+        <Today currency={currency} onPriceUpdate={setLivePrices} />
+        <PriceAlerts currency={currency} livePrices={livePrices} />
         <Suspense fallback={<div className="card p-6 animate-pulse h-48 rounded-xl" />}>
           <History currency={currency} />
         </Suspense>

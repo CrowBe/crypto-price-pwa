@@ -1,27 +1,20 @@
 type TLoadingState = "error" | "loading" | "empty" | "success";
-type Currency = "AUD" | "USD";
+type Currency = "AUD" | "USD" | "EUR" | "GBP";
 
-const allCoinKeys = ["ETH", "BTC", "XRP"] as const;
+const allCoinKeys = ["BTC", "ETH", "XRP", "SOL", "DOGE", "ADA", "LTC"] as const;
 type CoinKey = (typeof allCoinKeys)[number];
 
-interface IPriceData {
-  ETH?: { AUD: string; USD?: string };
-  BTC?: { AUD: string; USD?: string };
-  XRP?: { AUD: string; USD?: string };
-}
+type IPriceData = {
+  [K in CoinKey]?: { [currency: string]: string };
+};
 
 interface ICurrencyPriceData {
-  ETH: string;
-  BTC: string;
-  XRP: string;
+  [key: string]: string;
 }
 
-interface ITodayCurrencyPriceData extends ICurrencyPriceData {
+interface ITodayCurrencyPriceData {
   date: string;
-  /** Raw numeric values for trend calculations */
-  ETH_raw?: number;
-  BTC_raw?: number;
-  XRP_raw?: number;
+  [key: string]: string | number | undefined;
 }
 
 interface IHistoricalPriceData {
@@ -42,4 +35,13 @@ interface ICoinMeta {
   color: string;
   bgClass: string;
   textClass: string;
+}
+
+interface IPriceAlert {
+  id: string;
+  coin: CoinKey;
+  targetPrice: number;
+  direction: "above" | "below";
+  currency: Currency;
+  triggered: boolean;
 }
