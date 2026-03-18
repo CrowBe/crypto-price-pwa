@@ -25,3 +25,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 /dist
+
+# This project uses yarn; ignore other package manager lockfiles to avoid
+# Vercel detecting multiple lockfiles and failing the build
+package-lock.json
+pnpm-lock.yaml
