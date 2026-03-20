@@ -12,6 +12,12 @@ const cluster = import.meta.env.VITE_PUSHER_CLUSTER;
 const appKey = import.meta.env.VITE_PUSHER_KEY;
 const pusherApi = import.meta.env.VITE_PUSHER_API;
 
+/** Cache entry stored in localStorage — wraps the price payload with a timestamp */
+interface TodayCacheEntry {
+  data: ITodayCurrencyPriceData;
+  cachedAt: number; // Unix ms
+}
+
 interface TodayProps {
   currency: Currency;
   onPriceUpdate?: (prices: Record<CoinKey, number>) => void;
@@ -54,28 +60,44 @@ const Today = ({ currency, onPriceUpdate }: TodayProps) => {
   const [todayPrice, setTodayPrice] = useState<ITodayCurrencyPriceData>();
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>();
+  const [isStale, setIsStale] = useState(false);
+  const [cacheTime, setCacheTime] = useState<string>();
   const { Status, setStatus } = useStatus("loading");
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
-
-  const saveStateToLocalStorage = (today: ITodayCurrencyPriceData) => {
-    localStorage.setItem("today-state", JSON.stringify(today));
-  };
-
-  const restoreStateFromLocalStorage = () => {
-    const saved = localStorage.getItem("today-state");
-    if (saved) {
-      setTodayPrice(JSON.parse(saved));
-      setStatus("success");
-    } else {
-      setStatus("empty");
-    }
-  };
 
   const getCurrentTimeString = () =>
     format(new Date(), "HH:mm", { locale: enAU });
 
+  const saveStateToLocalStorage = (today: ITodayCurrencyPriceData) => {
+    const entry: TodayCacheEntry = { data: today, cachedAt: Date.now() };
+    localStorage.setItem("today-state", JSON.stringify(entry));
+  };
+
+  const restoreStateFromLocalStorage = () => {
+    const raw = localStorage.getItem("today-state");
+    if (!raw) {
+      setStatus("empty");
+      return;
+    }
+    try {
+      // Support both the new { data, cachedAt } shape and the old plain shape
+      const parsed = JSON.parse(raw) as TodayCacheEntry | ITodayCurrencyPriceData;
+      const entry = "cachedAt" in parsed
+        ? parsed
+        : { data: parsed as ITodayCurrencyPriceData, cachedAt: 0 };
+
+      setTodayPrice(entry.data);
+      if (entry.cachedAt) {
+        setCacheTime(format(new Date(entry.cachedAt), "HH:mm d MMM", { locale: enAU }));
+      }
+      setIsStale(true);
+      setStatus("success");
+    } catch {
+      setStatus("empty");
+    }
+  };
+
   const sendPricePusher = (response: ITodayCurrencyPriceData) => {
-    // Build payload from the fresh response only – avoids stale closure over todayPrice state.
     const payload: Record<string, string | number | undefined> = {
       date: response.date,
     };
@@ -98,9 +120,10 @@ const Today = ({ currency, onPriceUpdate }: TodayProps) => {
       saveStateToLocalStorage(today);
       setTodayPrice(today);
       setLastUpdated(getCurrentTimeString());
+      setIsStale(false);
+      setCacheTime(undefined);
       setStatus("success");
 
-      // Notify parent with raw numeric prices for alert checking
       if (onPriceUpdate) {
         const rawPrices: Partial<Record<CoinKey, number>> = {};
         ALL_COIN_KEYS.forEach((key) => {
@@ -115,6 +138,26 @@ const Today = ({ currency, onPriceUpdate }: TodayProps) => {
   };
 
   const handleError = (err: unknown) => {
+    // All providers failed — attempt to show cached data with a stale warning
+    const raw = localStorage.getItem("today-state");
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as TodayCacheEntry | ITodayCurrencyPriceData;
+        const entry = "cachedAt" in parsed
+          ? parsed
+          : { data: parsed as ITodayCurrencyPriceData, cachedAt: 0 };
+
+        setTodayPrice(entry.data);
+        if (entry.cachedAt) {
+          setCacheTime(format(new Date(entry.cachedAt), "HH:mm d MMM", { locale: enAU }));
+        }
+        setIsStale(true);
+        setStatus("success");
+        return;
+      } catch {
+        // fall through to error state
+      }
+    }
     setError(String(err));
     setStatus("error");
   };
@@ -175,17 +218,37 @@ const Today = ({ currency, onPriceUpdate }: TodayProps) => {
     <section>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse-slow"></span>
+          <span className={`w-2 h-2 rounded-full ${isStale ? "bg-amber-400" : "bg-emerald-500 animate-pulse-slow"}`}></span>
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
             Live Prices
           </h2>
         </div>
-        {lastUpdated && (
+        {isStale && cacheTime ? (
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            Cached data from {cacheTime}
+          </p>
+        ) : lastUpdated ? (
           <p className="text-xs text-slate-400 dark:text-slate-500">
             Updated {lastUpdated}
           </p>
-        )}
+        ) : null}
       </div>
+
+      {isStale && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400">
+          <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+          Live prices unavailable — showing cached data
+          {cacheTime ? ` from ${cacheTime}` : ""}.{" "}
+          <button
+            onClick={() => fetchResults()}
+            className="ml-1 underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-300"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       <Status
         loading={
