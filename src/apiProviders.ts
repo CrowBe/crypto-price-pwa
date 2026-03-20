@@ -123,6 +123,10 @@ export async function fetchHistoricalDaysCoinGecko(
     headers: coingeckoHeaders(),
   });
 
+  if (!data.prices.length) {
+    throw new Error(`No historical price data returned by CoinGecko for ${coin}`);
+  }
+
   const historicalData: IHistoricalPriceData[] = data.prices.map(
     ([tsMs, price], i) => ({
       time: Math.floor(tsMs / 1000),
