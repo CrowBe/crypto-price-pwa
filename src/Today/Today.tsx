@@ -86,7 +86,7 @@ const Today = ({ currency, onPriceUpdate }: TodayProps) => {
         ? parsed
         : { data: parsed as ITodayCurrencyPriceData, cachedAt: 0 };
 
-      setTodayPrice(entry.data);
+      setTodayPrice(entry.data as ITodayCurrencyPriceData);
       if (entry.cachedAt) {
         setCacheTime(format(new Date(entry.cachedAt), "HH:mm d MMM", { locale: enAU }));
       }
@@ -147,7 +147,7 @@ const Today = ({ currency, onPriceUpdate }: TodayProps) => {
           ? parsed
           : { data: parsed as ITodayCurrencyPriceData, cachedAt: 0 };
 
-        setTodayPrice(entry.data);
+        setTodayPrice(entry.data as ITodayCurrencyPriceData);
         if (entry.cachedAt) {
           setCacheTime(format(new Date(entry.cachedAt), "HH:mm d MMM", { locale: enAU }));
         }
