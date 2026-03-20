@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import axios from "axios";
 import Pusher from "pusher-js";
 import { format } from "date-fns";
 import { enAU } from "date-fns/locale";
@@ -10,7 +9,23 @@ import { LoadingState, ErrorState, EmptyState } from "../Results";
 
 const cluster = import.meta.env.VITE_PUSHER_CLUSTER;
 const appKey = import.meta.env.VITE_PUSHER_KEY;
-const pusherApi = import.meta.env.VITE_PUSHER_API;
+
+/**
+ * Architecture note
+ * -----------------
+ * When Pusher env vars are set, the server (crypto-price-server) is responsible
+ * for fetching prices on a schedule and broadcasting them via the "coin-prices"
+ * Pusher channel. This component performs ONE initial fetch so the UI populates
+ * immediately without waiting for the next broadcast, then switches to a
+ * purely passive listener — no client-side polling loop is started.
+ *
+ * When Pusher is NOT configured the component falls back to direct polling
+ * (every 60 s) against CoinGecko / CryptoCompare.
+ *
+ * This eliminates the previous circular flow where the client was both
+ * fetching prices from the APIs AND posting them back to the server so the
+ * server could re-broadcast them via Pusher to the same client.
+ */
 
 /** Cache entry stored in localStorage — wraps the price payload with a timestamp */
 interface TodayCacheEntry {
@@ -97,18 +112,6 @@ const Today = ({ currency, onPriceUpdate }: TodayProps) => {
     }
   };
 
-  const sendPricePusher = (response: ITodayCurrencyPriceData) => {
-    const payload: Record<string, string | number | undefined> = {
-      date: response.date,
-    };
-    ALL_COIN_KEYS.forEach((key) => {
-      if (response[key]) payload[key] = response[key];
-    });
-    axios
-      .post(`${pusherApi}/prices/new`, payload)
-      .catch((err) => console.error("Pusher post error:", err));
-  };
-
   const handleSuccess = (response: ITodayCurrencyPriceData) => {
     const hasAnyPrice = ALL_COIN_KEYS.some((key) => response[key]);
     if (response && hasAnyPrice) {
@@ -162,7 +165,11 @@ const Today = ({ currency, onPriceUpdate }: TodayProps) => {
     setStatus("error");
   };
 
-  const fetchResults = (callback = handleSuccess, statusChange = true) => {
+  /**
+   * Fetch prices directly from the API and update the UI.
+   * Used for the initial load and for the polling fallback.
+   */
+  const fetchResults = (statusChange = true) => {
     if (statusChange) setStatus("loading");
     getPriceMulti(ALL_COIN_KEYS, [currency])
       .then((res) => {
@@ -173,11 +180,20 @@ const Today = ({ currency, onPriceUpdate }: TodayProps) => {
           data[key] = rawStr ? formatCurrency(parseFloat(rawStr), currency) : "—";
           data[`${key}_raw`] = rawStr ? parseFloat(rawStr) : undefined;
         });
-        callback(data);
+        handleSuccess(data);
       })
       .catch(handleError);
+  };
 
-    timerRef.current = setTimeout(() => fetchResults(sendPricePusher), 60000);
+  /**
+   * Polling loop: fetch prices every 60 s, used when Pusher is not configured.
+   * In Pusher mode the server drives updates — no client-side loop is needed.
+   */
+  const schedulePoll = () => {
+    timerRef.current = setTimeout(() => {
+      fetchResults(false);
+      schedulePoll();
+    }, 60_000);
   };
 
   useEffect(() => {
@@ -187,29 +203,38 @@ const Today = ({ currency, onPriceUpdate }: TodayProps) => {
     }
 
     if (appKey && cluster) {
+      // --- Pusher mode ---
+      // The server fetches prices on a schedule and broadcasts them here.
+      // We do one initial direct fetch so data appears immediately, then
+      // rely entirely on incoming Pusher events — no polling loop.
       const pusher = new Pusher(appKey, {
         cluster,
         forceTLS: true,
         enabledTransports: ["ws", "wss", "xhr_polling"],
       });
 
-      const prices = pusher.subscribe("coin-prices");
-      fetchResults();
+      const channel = pusher.subscribe("coin-prices");
 
       pusher.connection.bind("error", (err: unknown) => {
         console.error("Pusher connection error:", err);
       });
 
-      prices.bind("prices", (data: ITodayCurrencyPriceData) => {
+      channel.bind("prices", (data: ITodayCurrencyPriceData) => {
         handleSuccess(data);
       });
+
+      // Initial fetch so the UI isn't empty while waiting for first broadcast
+      fetchResults();
 
       return () => {
         clearTimeout(timerRef.current);
         pusher.unsubscribe("coin-prices");
+        pusher.disconnect();
       };
     } else {
+      // --- Polling mode ---
       fetchResults();
+      schedulePoll();
       return () => clearTimeout(timerRef.current);
     }
   }, [currency]);
