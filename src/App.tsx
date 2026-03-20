@@ -1,4 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from "react";
+import type { Currency, CoinKey } from "./types";
 import Today from "./Today/Today";
 import PriceAlerts from "./PriceAlerts/PriceAlerts";
 const History = lazy(() => import("./History/History"));

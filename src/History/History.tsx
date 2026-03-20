@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import type { SVGProps } from "react";
+import type { Currency, CoinKey, IHistoricalPriceData } from "../types";
 import {
   ResponsiveContainer,
   LineChart,
@@ -40,6 +42,26 @@ const PRESETS: { label: TimePreset; days: number }[] = [
   { label: "6M", days: 180 },
   { label: "1Y", days: 365 },
 ];
+
+/** Custom X-axis tick that angles labels for readability on small screens. */
+const AngledTick = (props: SVGProps<SVGTextElement> & { x?: number; y?: number; payload?: { value: string } }) => {
+  const { x, y, payload } = props;
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text
+        x={0}
+        y={0}
+        dy={12}
+        textAnchor="end"
+        fill="currentColor"
+        fontSize={11}
+        transform="rotate(-35)"
+      >
+        {payload?.value}
+      </text>
+    </g>
+  );
+};
 
 const History = ({ currency }: HistoryProps) => {
   const [preset, setPreset] = useState<TimePreset>("1W");
@@ -273,7 +295,7 @@ const History = ({ currency }: HistoryProps) => {
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
                             <XAxis
                               dataKey="date"
-                              tick={{ fontSize: 11, fill: "currentColor", angle: -35, textAnchor: "end", dy: 8 }}
+                              tick={<AngledTick />}
                               tickLine={false}
                               axisLine={false}
                               interval="equidistantPreserveStart"

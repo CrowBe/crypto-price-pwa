@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { IPriceData, IHistoricalPriceData } from "./types";
 import { getPriceMulti, getPriceHistorical, getPriceHistoricalDays } from "./cryptoService";
 
 // Mock CoinGecko provider functions

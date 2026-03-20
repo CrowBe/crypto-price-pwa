@@ -10,6 +10,7 @@
  */
 
 import axios from "axios";
+import type { CoinKey, Currency, IPriceData, IHistoricalPriceData } from "./types";
 
 // ---------------------------------------------------------------------------
 // Retry utility

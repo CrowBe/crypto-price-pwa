@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import History from "./History";
 
@@ -80,34 +80,23 @@ describe("History", () => {
     });
   });
 
-  it("changes the amount when typing in the number input", async () => {
+  it("switches to a different time preset", async () => {
     mockGetHistoricalDays.mockResolvedValue(buildMockResponse());
     render(<History currency="AUD" />);
 
-    const input = screen.getByRole("spinbutton", { name: "Duration amount" });
-    expect(input).toHaveValue(7);
-
-    fireEvent.change(input, { target: { value: "14" } });
-    expect(input).toHaveValue(14);
+    // Default is 1W; click 1M to switch
+    await userEvent.click(screen.getByText("1M"));
+    // 1M button should now appear selected (has bg-white class)
+    expect(screen.getByText("1M").className).toMatch(/bg-white/);
   });
 
-  it("clamps amount to the unit's minimum when a value below min is entered", () => {
+  it("renders all time preset buttons", () => {
     mockGetHistoricalDays.mockResolvedValue(buildMockResponse());
     render(<History currency="AUD" />);
 
-    const input = screen.getByRole("spinbutton", { name: "Duration amount" });
-    fireEvent.change(input, { target: { value: "0" } });
-    // Min for "days" unit is 2
-    expect(input).toHaveValue(2);
-  });
-
-  it("switches to the weeks unit", async () => {
-    mockGetHistoricalDays.mockResolvedValue(buildMockResponse());
-    render(<History currency="AUD" />);
-
-    await userEvent.click(screen.getByText("weeks"));
-    // weeks button should now appear selected (has bg-white class)
-    expect(screen.getByText("weeks").className).toMatch(/bg-white/);
+    for (const label of ["1D", "1W", "1M", "3M", "6M", "1Y"]) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
   });
 
   it("restores data from localStorage when offline", async () => {

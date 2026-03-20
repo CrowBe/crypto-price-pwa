@@ -1,3 +1,6 @@
+import type { Currency, CoinKey, ICoinMeta } from "./types";
+import { ALL_COIN_KEYS_CONST } from "./types";
+
 export const createCurrencyFormatter = (currency: Currency) =>
   new Intl.NumberFormat("en-AU", {
     style: "currency",
@@ -76,4 +79,4 @@ export const COIN_ICONS: Record<CoinKey, string> = {
   LTC: "Ł",
 };
 
-export const ALL_COIN_KEYS: CoinKey[] = ["BTC", "ETH", "XRP", "SOL", "DOGE", "ADA", "LTC"];
+export const ALL_COIN_KEYS: CoinKey[] = [...ALL_COIN_KEYS_CONST];
