@@ -268,10 +268,16 @@ const History = ({ currency }: HistoryProps) => {
                           </button>
                         </div>
                       ) : (
-                        <ResponsiveContainer width="100%" height={140}>
-                          <LineChart data={chartData} margin={{ top: 2, right: 8, bottom: 0, left: 0 }}>
+                        <ResponsiveContainer width="100%" height={160}>
+                          <LineChart data={chartData} margin={{ top: 2, right: 8, bottom: 20, left: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
-                            <XAxis dataKey="date" tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} interval="preserveStartEnd" padding={{ right: 12 }} />
+                            <XAxis
+                              dataKey="date"
+                              tick={{ fontSize: 11, fill: "currentColor", angle: -35, textAnchor: "end", dy: 8 }}
+                              tickLine={false}
+                              axisLine={false}
+                              interval="equidistantPreserveStart"
+                            />
                             <YAxis
                               tickFormatter={(v: number) => formatCurrency(v, currency).replace(/\.\d+/, "")}
                               tick={{ fontSize: 10, fill: "currentColor" }}
