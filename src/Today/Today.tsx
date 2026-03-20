@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import type { Currency, CoinKey, ITodayCurrencyPriceData } from "../types";
 import Pusher from "pusher-js";
 import { format } from "date-fns";
 import { enAU } from "date-fns/locale";

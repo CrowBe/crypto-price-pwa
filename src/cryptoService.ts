@@ -13,6 +13,7 @@
  * their own localStorage cache and surface a stale-data warning.
  */
 
+import type { CoinKey, Currency, IPriceData, IHistoricalPriceData } from "./types";
 import cryptoCompareClient from "./api";
 import {
   withRetry,

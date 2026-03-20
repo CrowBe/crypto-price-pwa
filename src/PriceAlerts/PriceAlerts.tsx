@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import type { Currency, CoinKey, IPriceAlert } from "../types";
 import { COIN_META, COIN_ICONS, ALL_COIN_KEYS, formatCurrency } from "../utils";
 
 interface PriceAlertsProps {

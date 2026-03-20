@@ -10,6 +10,7 @@
  */
 
 import axios from "axios";
+import type { CoinKey, Currency, IPriceData, IHistoricalPriceData } from "./types";
 
 // ---------------------------------------------------------------------------
 // Retry utility
@@ -129,7 +130,8 @@ export async function fetchHistoricalDaysCoinGecko(
 
   const historicalData: IHistoricalPriceData[] = data.prices.map(
     ([tsMs, price], i) => ({
-      time: Math.floor(tsMs / 1000),
+      // Normalise to midnight UTC so dates align with CryptoCompare
+      time: Math.floor(tsMs / 86_400_000) * 86_400,
       open: price,
       high: price,
       low: price,
