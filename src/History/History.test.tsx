@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import History from "./History";
 
@@ -57,7 +57,7 @@ describe("History", () => {
     expect(screen.getByText(/Ethereum/i)).toBeInTheDocument();
   });
 
-  it("shows error state when API call fails", async () => {
+  it("shows error state when API call fails and no cache exists", async () => {
     mockGetHistoricalDays.mockRejectedValue(new Error("Network error"));
     render(<History currency="AUD" />);
 
@@ -80,36 +80,34 @@ describe("History", () => {
     });
   });
 
-  it("increments the day count when + button is clicked", async () => {
+  it("changes the amount when typing in the number input", async () => {
     mockGetHistoricalDays.mockResolvedValue(buildMockResponse());
     render(<History currency="AUD" />);
 
-    // Initial display is "7 days"
-    expect(screen.getByText("7 days")).toBeInTheDocument();
+    const input = screen.getByRole("spinbutton", { name: "Duration amount" });
+    expect(input).toHaveValue(7);
 
-    await userEvent.click(screen.getByRole("button", { name: "Increase days" }));
-    expect(screen.getByText("8 days")).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: "14" } });
+    expect(input).toHaveValue(14);
   });
 
-  it("decrements the day count when − button is clicked", async () => {
+  it("clamps amount to the unit's minimum when a value below min is entered", () => {
     mockGetHistoricalDays.mockResolvedValue(buildMockResponse());
     render(<History currency="AUD" />);
 
-    await userEvent.click(screen.getByRole("button", { name: "Decrease days" }));
-    expect(screen.getByText("6 days")).toBeInTheDocument();
+    const input = screen.getByRole("spinbutton", { name: "Duration amount" });
+    fireEvent.change(input, { target: { value: "0" } });
+    // Min for "days" unit is 2
+    expect(input).toHaveValue(2);
   });
 
-  it("disables decrement button at minimum (2 days)", async () => {
-    mockGetHistoricalDays.mockResolvedValue(buildMockResponse(2));
+  it("switches to the weeks unit", async () => {
+    mockGetHistoricalDays.mockResolvedValue(buildMockResponse());
     render(<History currency="AUD" />);
 
-    // Reduce to minimum
-    for (let i = 0; i < 10; i++) {
-      const btn = screen.getByRole("button", { name: "Decrease days" });
-      if (!btn.hasAttribute("disabled")) await userEvent.click(btn);
-    }
-
-    expect(screen.getByRole("button", { name: "Decrease days" })).toBeDisabled();
+    await userEvent.click(screen.getByText("weeks"));
+    // weeks button should now appear selected (has bg-white class)
+    expect(screen.getByText("weeks").className).toMatch(/bg-white/);
   });
 
   it("restores data from localStorage when offline", async () => {
@@ -125,5 +123,22 @@ describe("History", () => {
     });
 
     expect(mockGetHistoricalDays).not.toHaveBeenCalled();
+  });
+
+  it("shows stale data banner when falling back to cache on API error", async () => {
+    mockGetHistoricalDays.mockRejectedValue(new Error("Rate limited"));
+
+    const cachedEntry = {
+      data: [{ date: "Nov 1", BTC: 45000, ETH: 2500 }],
+      cachedAt: Date.now() - 3600_000, // 1 hour ago
+    };
+    localStorage.setItem("history-chart-7", JSON.stringify(cachedEntry));
+
+    render(<History currency="AUD" />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Historical data unavailable/i)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Bitcoin/i)).toBeInTheDocument();
   });
 });

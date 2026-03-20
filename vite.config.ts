@@ -42,6 +42,17 @@ export default defineConfig({
               },
             },
           },
+          {
+            urlPattern: /^https:\/\/api\.coingecko\.com\/.*/i,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "coingecko-api-cache",
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60, // 1 hour
+              },
+            },
+          },
         ],
       },
     }),

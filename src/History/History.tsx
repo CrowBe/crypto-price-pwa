@@ -10,6 +10,7 @@ import {
 } from "recharts";
 import { getPriceHistoricalDays } from "../cryptoService";
 import { format, fromUnixTime } from "date-fns";
+import { enAU } from "date-fns/locale";
 import { ErrorState, LoadingState, EmptyState } from "../Results";
 import { formatCurrency, COIN_META, ALL_COIN_KEYS } from "../utils";
 import useStatus from "../hooks/useStatus";
@@ -21,6 +22,12 @@ interface HistoryProps {
 interface ChartDataPoint {
   date: string;
   [key: string]: string | number;
+}
+
+/** Cache entry stored in localStorage — wraps chart data with a timestamp */
+interface HistoryCacheEntry {
+  data: ChartDataPoint[];
+  cachedAt: number; // Unix ms
 }
 
 type TimeUnit = "days" | "weeks" | "months";
@@ -37,6 +44,8 @@ const History = ({ currency }: HistoryProps) => {
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [error, setError] = useState<string>("");
   const [activeView, setActiveView] = useState<"chart" | "table">("chart");
+  const [isStale, setIsStale] = useState(false);
+  const [cacheTime, setCacheTime] = useState<string>();
   const { Status, setStatus } = useStatus("loading");
 
   const numDays = UNIT_CONFIG[unit].toDays(amount);
@@ -54,14 +63,32 @@ const History = ({ currency }: HistoryProps) => {
   };
 
   const restoreStateFromLocalStorage = useCallback(() => {
-    const saved = localStorage.getItem(`history-chart-${numDays}`);
-    if (saved) {
-      setChartData(JSON.parse(saved));
+    const raw = localStorage.getItem(`history-chart-${numDays}`);
+    if (!raw) {
+      setStatus("empty");
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as HistoryCacheEntry | ChartDataPoint[];
+      const entry = Array.isArray(parsed)
+        ? { data: parsed, cachedAt: 0 }
+        : parsed;
+
+      setChartData(entry.data);
+      if (entry.cachedAt) {
+        setCacheTime(format(new Date(entry.cachedAt), "HH:mm d MMM", { locale: enAU }));
+      }
+      setIsStale(true);
       setStatus("success");
-    } else {
+    } catch {
       setStatus("empty");
     }
   }, [numDays, setStatus]);
+
+  const saveToLocalStorage = (points: ChartDataPoint[]) => {
+    const entry: HistoryCacheEntry = { data: points, cachedAt: Date.now() };
+    localStorage.setItem(`history-chart-${numDays}`, JSON.stringify(entry));
+  };
 
   const fetchDays = useCallback(async () => {
     setStatus("loading");
@@ -73,19 +100,44 @@ const History = ({ currency }: HistoryProps) => {
       const points: ChartDataPoint[] = [];
       const firstCoinData = results[0].Data;
       for (let i = numDays - 1; i >= 0; i--) {
+        const entry = firstCoinData[i];
+        if (!entry) continue;
         const point: ChartDataPoint = {
-          date: format(fromUnixTime(firstCoinData[i].time), "MMM d"),
+          date: format(fromUnixTime(entry.time), "MMM d"),
         };
         ALL_COIN_KEYS.forEach((coin, idx) => {
-          point[coin] = results[idx].Data[i].close;
+          const d = results[idx].Data[i];
+          point[coin] = d ? d.close : 0;
         });
         points.push(point);
       }
 
       setChartData(points);
-      localStorage.setItem(`history-chart-${numDays}`, JSON.stringify(points));
+      saveToLocalStorage(points);
+      setIsStale(false);
+      setCacheTime(undefined);
       setStatus("success");
     } catch (err) {
+      // All providers failed — try cache with stale warning
+      const raw = localStorage.getItem(`history-chart-${numDays}`);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as HistoryCacheEntry | ChartDataPoint[];
+          const cacheEntry = Array.isArray(parsed)
+            ? { data: parsed, cachedAt: 0 }
+            : parsed;
+
+          setChartData(cacheEntry.data);
+          if (cacheEntry.cachedAt) {
+            setCacheTime(format(new Date(cacheEntry.cachedAt), "HH:mm d MMM", { locale: enAU }));
+          }
+          setIsStale(true);
+          setStatus("success");
+          return;
+        } catch {
+          // fall through to error state
+        }
+      }
       setError(String(err));
       setStatus("error");
     }
@@ -159,6 +211,22 @@ const History = ({ currency }: HistoryProps) => {
           </div>
         </div>
       </div>
+
+      {isStale && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400">
+          <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+          Historical data unavailable — showing cached data
+          {cacheTime ? ` from ${cacheTime}` : ""}.{" "}
+          <button
+            onClick={fetchDays}
+            className="ml-1 underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-300"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       <Status
         loading={
