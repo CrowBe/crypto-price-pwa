@@ -100,17 +100,21 @@ const History = ({ currency }: HistoryProps) => {
       });
 
       // Need at least one coin with data to render the chart
-      const referenceData = coinData.find((d) => d !== null);
+      // Sort each coin's data chronologically (oldest → newest) to ensure correct chart order
+      const sortedCoinData = coinData.map((data) =>
+        data ? [...data].sort((a, b) => a.time - b.time) : null
+      );
+
+      const referenceData = sortedCoinData.find((d) => d !== null);
       if (!referenceData) throw new Error("No historical data available for any coin");
 
       // Build chart points in chronological order (oldest → newest)
-      // CoinGecko returns data oldest-first; iterate in natural order
       const points: ChartDataPoint[] = referenceData.map((entry, i) => {
         const point: ChartDataPoint = {
           date: format(fromUnixTime(entry.time), numDays <= 1 ? "HH:mm" : "MMM d"),
         };
         ALL_COIN_KEYS.forEach((coin, idx) => {
-          const d = coinData[idx]?.[i];
+          const d = sortedCoinData[idx]?.[i];
           point[coin] = d ? d.close : 0;
         });
         return point;
