@@ -9,7 +9,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { getPriceHistoricalDays } from "../cryptoService";
-import { format, fromUnixTime } from "date-fns";
+import { format } from "date-fns";
 import { enAU } from "date-fns/locale";
 import { ErrorState, LoadingState, EmptyState } from "../Results";
 import { formatCurrency, COIN_META, ALL_COIN_KEYS } from "../utils";
@@ -110,9 +110,13 @@ const History = ({ currency }: HistoryProps) => {
 
       // Build chart points in chronological order (oldest → newest)
       const points: ChartDataPoint[] = referenceData.map((entry, i) => {
-        const point: ChartDataPoint = {
-          date: format(fromUnixTime(entry.time), numDays <= 1 ? "HH:mm" : "MMM d"),
-        };
+        // Format in UTC to avoid local-timezone date shifts (API timestamps are UTC)
+        const d = new Date(entry.time * 1000);
+        const dateStr =
+          numDays <= 1
+            ? `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`
+            : `${d.toLocaleString("en-US", { month: "short", timeZone: "UTC" })} ${d.getUTCDate()}`;
+        const point: ChartDataPoint = { date: dateStr };
         ALL_COIN_KEYS.forEach((coin, idx) => {
           const d = sortedCoinData[idx]?.[i];
           point[coin] = d ? d.close : 0;
@@ -267,7 +271,7 @@ const History = ({ currency }: HistoryProps) => {
                         <ResponsiveContainer width="100%" height={140}>
                           <LineChart data={chartData} margin={{ top: 2, right: 8, bottom: 0, left: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
-                            <XAxis dataKey="date" tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} />
+                            <XAxis dataKey="date" tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} interval="preserveStartEnd" padding={{ right: 12 }} />
                             <YAxis
                               tickFormatter={(v: number) => formatCurrency(v, currency).replace(/\.\d+/, "")}
                               tick={{ fontSize: 10, fill: "currentColor" }}
