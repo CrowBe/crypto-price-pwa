@@ -199,44 +199,57 @@ const Today = ({ currency, onPriceUpdate }: TodayProps) => {
   useEffect(() => {
     if (!window.navigator.onLine) {
       restoreStateFromLocalStorage();
-      return;
+    } else {
+      fetchResults();
     }
 
-    if (appKey && cluster) {
-      // --- Pusher mode ---
-      // The server fetches prices on a schedule and broadcasts them here.
-      // We do one initial direct fetch so data appears immediately, then
-      // rely entirely on incoming Pusher events — no polling loop.
-      const pusher = new Pusher(appKey, {
-        cluster,
-        forceTLS: true,
-        enabledTransports: ["ws", "wss", "xhr_polling"],
-      });
-
-      const channel = pusher.subscribe("coin-prices");
-
-      pusher.connection.bind("error", (err: unknown) => {
-        console.error("Pusher connection error:", err);
-      });
-
-      channel.bind("prices", (data: ITodayCurrencyPriceData) => {
-        handleSuccess(data);
-      });
-
-      // Initial fetch so the UI isn't empty while waiting for first broadcast
+    // Auto-retry when the device comes back online
+    const handleOnline = () => {
       fetchResults();
+    };
+    window.addEventListener("online", handleOnline);
 
-      return () => {
-        clearTimeout(timerRef.current);
-        pusher.unsubscribe("coin-prices");
-        pusher.disconnect();
-      };
-    } else {
+    return () => {
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [currency]);
+
+  useEffect(() => {
+    if (!appKey || !cluster) {
       // --- Polling mode ---
-      fetchResults();
       schedulePoll();
       return () => clearTimeout(timerRef.current);
     }
+
+    // --- Pusher mode ---
+    const pusher = new Pusher(appKey, {
+      cluster,
+      forceTLS: true,
+      enabledTransports: ["ws", "wss", "xhr_polling"],
+    });
+
+    const channel = pusher.subscribe("coin-prices");
+
+    // If Pusher fails to connect, fall back to polling
+    pusher.connection.bind("error", (err: unknown) => {
+      console.error("Pusher connection error:", err);
+      if (!timerRef.current) schedulePoll();
+    });
+
+    pusher.connection.bind("failed", () => {
+      console.warn("Pusher connection failed — falling back to polling");
+      if (!timerRef.current) schedulePoll();
+    });
+
+    channel.bind("prices", (data: ITodayCurrencyPriceData) => {
+      handleSuccess(data);
+    });
+
+    return () => {
+      clearTimeout(timerRef.current);
+      pusher.unsubscribe("coin-prices");
+      pusher.disconnect();
+    };
   }, [currency]);
 
   return (
