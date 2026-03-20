@@ -15,6 +15,7 @@ vi.mock("pusher-js", () => ({
     }),
     connection: { bind: vi.fn() },
     unsubscribe: vi.fn(),
+    disconnect: vi.fn(),
   })),
 }));
 
