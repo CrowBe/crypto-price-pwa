@@ -23,22 +23,34 @@ interface ChartDataPoint {
   [key: string]: string | number;
 }
 
-const MIN_DAYS = 2;
-const MAX_DAYS = 30;
+type TimeUnit = "days" | "weeks" | "months";
+
+const UNIT_CONFIG: Record<TimeUnit, { min: number; max: number; toDays: (n: number) => number; label: string }> = {
+  days:   { min: 2,  max: 90,  toDays: (n) => n,      label: "Days"   },
+  weeks:  { min: 1,  max: 52,  toDays: (n) => n * 7,  label: "Weeks"  },
+  months: { min: 1,  max: 24,  toDays: (n) => n * 30, label: "Months" },
+};
 
 const History = ({ currency }: HistoryProps) => {
-  const [numDays, setNumDays] = useState<number>(7);
+  const [amount, setAmount] = useState<number>(7);
+  const [unit, setUnit] = useState<TimeUnit>("days");
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [error, setError] = useState<string>("");
   const [activeView, setActiveView] = useState<"chart" | "table">("chart");
   const { Status, setStatus } = useStatus("loading");
 
-  const adjustNumDays = (direction: "decrement" | "increment") => {
-    setNumDays((prev) => {
-      if (direction === "decrement" && prev > MIN_DAYS) return prev - 1;
-      if (direction === "increment" && prev < MAX_DAYS) return prev + 1;
-      return prev;
-    });
+  const numDays = UNIT_CONFIG[unit].toDays(amount);
+
+  const handleUnitChange = (newUnit: TimeUnit) => {
+    const cfg = UNIT_CONFIG[newUnit];
+    setUnit(newUnit);
+    setAmount((prev) => Math.min(Math.max(prev, cfg.min), cfg.max));
+  };
+
+  const handleAmountChange = (value: string) => {
+    const n = parseInt(value, 10);
+    const cfg = UNIT_CONFIG[unit];
+    if (!isNaN(n)) setAmount(Math.min(Math.max(n, cfg.min), cfg.max));
   };
 
   const restoreStateFromLocalStorage = useCallback(() => {
@@ -101,27 +113,32 @@ const History = ({ currency }: HistoryProps) => {
         </h2>
 
         <div className="flex items-center gap-3 flex-wrap">
-          {/* Days stepper */}
-          <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5">
-            <button
-              onClick={() => adjustNumDays("decrement")}
-              disabled={numDays <= MIN_DAYS}
-              className="w-6 h-6 flex items-center justify-center rounded text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              aria-label="Decrease days"
-            >
-              −
-            </button>
-            <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 w-16 text-center tabular-nums">
-              {numDays} days
-            </span>
-            <button
-              onClick={() => adjustNumDays("increment")}
-              disabled={numDays >= MAX_DAYS}
-              className="w-6 h-6 flex items-center justify-center rounded text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              aria-label="Increase days"
-            >
-              +
-            </button>
+          {/* Duration input */}
+          <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5">
+            <input
+              type="number"
+              value={amount}
+              min={UNIT_CONFIG[unit].min}
+              max={UNIT_CONFIG[unit].max}
+              onChange={(e) => handleAmountChange(e.target.value)}
+              className="w-12 text-sm font-semibold text-center text-slate-900 dark:text-slate-100 bg-transparent tabular-nums focus:outline-none"
+              aria-label="Duration amount"
+            />
+            <div className="flex items-center bg-slate-100 dark:bg-slate-700 rounded-md p-0.5 gap-0.5">
+              {(["days", "weeks", "months"] as TimeUnit[]).map((u) => (
+                <button
+                  key={u}
+                  onClick={() => handleUnitChange(u)}
+                  className={`px-2 py-0.5 rounded text-xs font-semibold capitalize transition-all duration-200 ${
+                    unit === u
+                      ? "bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm"
+                      : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                  }`}
+                >
+                  {u}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* View toggle */}
