@@ -10,7 +10,7 @@
  */
 
 import axios from "axios";
-import type { CoinKey, Currency, IPriceData, IHistoricalPriceData } from "./types";
+import type { CoinKey, Currency, IPriceData, IHistoricalPriceData, ICoinMarketData } from "./types";
 
 // ---------------------------------------------------------------------------
 // Retry utility
@@ -144,4 +144,61 @@ export async function fetchHistoricalDaysCoinGecko(
   );
 
   return { Data: historicalData };
+}
+
+// ---------------------------------------------------------------------------
+// CoinGecko market listing + search
+// ---------------------------------------------------------------------------
+
+export const COIN_MARKETS_PER_PAGE = 20;
+
+/**
+ * Fetch a paginated list of coins from CoinGecko /coins/markets.
+ * When `ids` is provided the results are filtered to those specific IDs
+ * (used after a search to resolve matching coin IDs into full market data).
+ */
+export async function fetchCoinMarkets(
+  currency: Currency,
+  page: number,
+  ids?: string[]
+): Promise<ICoinMarketData[]> {
+  const params: Record<string, string | number> = {
+    vs_currency: currency.toLowerCase(),
+    order: "market_cap_desc",
+    per_page: COIN_MARKETS_PER_PAGE,
+    page,
+    sparkline: "false",
+    price_change_percentage: "24h",
+  };
+
+  if (ids && ids.length > 0) {
+    params.ids = ids.join(",");
+    // When filtering by IDs, fetch all at once — no paging needed
+    params.per_page = Math.min(ids.length, 250);
+    params.page = 1;
+  }
+
+  const { data } = await axios.get<ICoinMarketData[]>(
+    `${COINGECKO_BASE}/coins/markets`,
+    { params, headers: coingeckoHeaders() }
+  );
+
+  return data;
+}
+
+/**
+ * Search CoinGecko for coins matching `query`.
+ * Returns up to `limit` matching coin IDs suitable for passing to fetchCoinMarkets.
+ */
+export async function searchCoins(query: string, limit = 50): Promise<string[]> {
+  if (!query.trim()) return [];
+
+  const { data } = await axios.get<{
+    coins: { id: string; name: string; symbol: string }[];
+  }>(`${COINGECKO_BASE}/search`, {
+    params: { query },
+    headers: coingeckoHeaders(),
+  });
+
+  return data.coins.slice(0, limit).map((c) => c.id);
 }

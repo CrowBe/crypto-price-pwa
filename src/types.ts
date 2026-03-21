@@ -59,6 +59,19 @@ export interface ICoinMeta {
   textClass: string;
 }
 
+/** A single coin entry from the CoinGecko /coins/markets endpoint */
+export interface ICoinMarketData {
+  id: string;
+  symbol: string;
+  name: string;
+  image: string;
+  current_price: number | null;
+  market_cap: number | null;
+  market_cap_rank: number | null;
+  price_change_percentage_24h: number | null;
+  total_volume: number | null;
+}
+
 /** A user-defined price alert */
 export interface IPriceAlert {
   id: string;
