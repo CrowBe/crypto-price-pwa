@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { SVGProps } from "react";
 import type { Currency, CoinKey, IHistoricalPriceData } from "../types";
 import {
@@ -13,7 +13,7 @@ import {
 import { getPriceHistoricalDays } from "../cryptoService";
 import { format } from "date-fns";
 import { enAU } from "date-fns/locale";
-import { ErrorState, LoadingState, EmptyState } from "../Results";
+import { ErrorState, EmptyState } from "../Results";
 import { formatCurrency, COIN_META, ALL_COIN_KEYS } from "../utils";
 import useStatus from "../hooks/useStatus";
 
@@ -33,6 +33,7 @@ interface HistoryCacheEntry {
 }
 
 type TimePreset = "1D" | "1W" | "1M" | "3M" | "6M" | "1Y";
+type CoinStatus = "loading" | "success" | "error";
 
 const PRESETS: { label: TimePreset; days: number }[] = [
   { label: "1D", days: 1 },
@@ -42,6 +43,8 @@ const PRESETS: { label: TimePreset; days: number }[] = [
   { label: "6M", days: 180 },
   { label: "1Y", days: 365 },
 ];
+
+const MAX_AUTO_RETRIES = 3;
 
 /** Custom X-axis tick that angles labels for readability on small screens. */
 const AngledTick = (props: SVGProps<SVGTextElement> & { x?: number; y?: number; payload?: { value: string } }) => {
@@ -63,15 +66,44 @@ const AngledTick = (props: SVGProps<SVGTextElement> & { x?: number; y?: number; 
   );
 };
 
+/** Skeleton placeholder matching the shape of a single coin chart row. */
+const CoinChartSkeleton = ({ coin, attempt }: { coin: CoinKey; attempt?: number }) => {
+  const meta = COIN_META[coin];
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <span
+          className="w-3 h-3 rounded-full inline-block opacity-30"
+          style={{ backgroundColor: meta.color }}
+        />
+        <div className="skeleton h-4 w-36 rounded" />
+      </div>
+      <div className="skeleton w-full rounded-lg" style={{ height: 160 }} />
+      {attempt !== undefined && attempt > 0 && (
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5 flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 border border-slate-300 dark:border-slate-600 border-t-transparent rounded-full animate-spin" />
+          Retrying… attempt {attempt} of {MAX_AUTO_RETRIES}
+        </p>
+      )}
+    </div>
+  );
+};
+
 const History = ({ currency }: HistoryProps) => {
   const [preset, setPreset] = useState<TimePreset>("1W");
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
-  const [failedCoins, setFailedCoins] = useState<CoinKey[]>([]);
+  const [coinStatuses, setCoinStatuses] = useState<Record<CoinKey, CoinStatus>>(
+    () => Object.fromEntries(ALL_COIN_KEYS.map((k) => [k, "loading"])) as Record<CoinKey, CoinStatus>
+  );
+  const [coinRetryAttempts, setCoinRetryAttempts] = useState<Partial<Record<CoinKey, number>>>({});
   const [error, setError] = useState<string>("");
   const [activeView, setActiveView] = useState<"chart" | "table">("chart");
   const [isStale, setIsStale] = useState(false);
   const [cacheTime, setCacheTime] = useState<string>();
   const { Status, setStatus } = useStatus("loading");
+
+  /** Abort signal shared across per-coin retries; invalidated on each new fetchDays call. */
+  const abortRef = useRef<{ aborted: boolean }>({ aborted: false });
 
   const numDays = PRESETS.find((p) => p.label === preset)!.days;
 
@@ -92,6 +124,7 @@ const History = ({ currency }: HistoryProps) => {
         setCacheTime(format(new Date(entry.cachedAt), "HH:mm d MMM", { locale: enAU }));
       }
       setIsStale(true);
+      setCoinStatuses(Object.fromEntries(ALL_COIN_KEYS.map((k) => [k, "success"])) as Record<CoinKey, CoinStatus>);
       setStatus("success");
     } catch {
       setStatus("empty");
@@ -103,13 +136,75 @@ const History = ({ currency }: HistoryProps) => {
     localStorage.setItem(`history-chart-${numDays}`, JSON.stringify(entry));
   };
 
+  /**
+   * Retry a single coin's fetch up to MAX_AUTO_RETRIES times with exponential backoff.
+   * Updates chartData in-place on success. Shows per-coin skeleton during attempts.
+   * Aborts silently if the abort signal fires (e.g. user changes preset).
+   */
+  const retryCoinFetch = useCallback(
+    async (coin: CoinKey, abort: { aborted: boolean }) => {
+      for (let attempt = 0; attempt < MAX_AUTO_RETRIES; attempt++) {
+        if (abort.aborted) return;
+
+        if (attempt > 0) {
+          const delay = Math.min(1000 * 2 ** (attempt - 1), 8000);
+          await new Promise((r) => setTimeout(r, delay));
+          if (abort.aborted) return;
+        }
+
+        setCoinRetryAttempts((prev) => ({ ...prev, [coin]: attempt + 1 }));
+
+        try {
+          const result = await getPriceHistoricalDays(coin, currency, numDays);
+          if (abort.aborted) return;
+
+          const sorted = [...result.Data].sort((a, b) => a.time - b.time);
+          setChartData((prev) =>
+            prev.map((point, i) => ({ ...point, [coin]: sorted[i]?.close ?? 0 }))
+          );
+          setCoinStatuses((prev) => ({ ...prev, [coin]: "success" }));
+          setCoinRetryAttempts((prev) => {
+            const next = { ...prev };
+            delete next[coin];
+            return next;
+          });
+          return;
+        } catch {
+          // continue to next attempt
+        }
+      }
+
+      if (!abort.aborted) {
+        setCoinStatuses((prev) => ({ ...prev, [coin]: "error" }));
+        setCoinRetryAttempts((prev) => {
+          const next = { ...prev };
+          delete next[coin];
+          return next;
+        });
+      }
+    },
+    [currency, numDays]
+  );
+
   const fetchDays = useCallback(async () => {
+    // Cancel any in-progress per-coin retries from a previous fetch
+    abortRef.current.aborted = true;
+    const abort = { aborted: false };
+    abortRef.current = abort;
+
     setStatus("loading");
+    setCoinStatuses(Object.fromEntries(ALL_COIN_KEYS.map((k) => [k, "loading"])) as Record<CoinKey, CoinStatus>);
+    setCoinRetryAttempts({});
+    setIsStale(false);
+    setCacheTime(undefined);
+
     try {
       // Use allSettled so a single coin failure doesn't block the whole chart
       const settled = await Promise.allSettled(
         ALL_COIN_KEYS.map((coin) => getPriceHistoricalDays(coin, currency, numDays))
       );
+
+      if (abort.aborted) return;
 
       // Track which coins failed or returned empty data
       const failed: CoinKey[] = [];
@@ -121,8 +216,7 @@ const History = ({ currency }: HistoryProps) => {
         return result.value.Data;
       });
 
-      // Need at least one coin with data to render the chart
-      // Sort each coin's data chronologically (oldest → newest) to ensure correct chart order
+      // Sort each coin's data chronologically (oldest → newest)
       const sortedCoinData = coinData.map((data) =>
         data ? [...data].sort((a, b) => a.time - b.time) : null
       );
@@ -130,9 +224,8 @@ const History = ({ currency }: HistoryProps) => {
       const referenceData = sortedCoinData.find((d) => d !== null);
       if (!referenceData) throw new Error("No historical data available for any coin");
 
-      // Build chart points in chronological order (oldest → newest)
+      // Build chart points in chronological order
       const points: ChartDataPoint[] = referenceData.map((entry, i) => {
-        // Format in UTC to avoid local-timezone date shifts (API timestamps are UTC)
         const d = new Date(entry.time * 1000);
         const dateStr =
           numDays <= 1
@@ -140,19 +233,30 @@ const History = ({ currency }: HistoryProps) => {
             : `${d.toLocaleString("en-US", { month: "short", timeZone: "UTC" })} ${d.getUTCDate()}`;
         const point: ChartDataPoint = { date: dateStr };
         ALL_COIN_KEYS.forEach((coin, idx) => {
-          const d = sortedCoinData[idx]?.[i];
-          point[coin] = d ? d.close : 0;
+          const dp = sortedCoinData[idx]?.[i];
+          point[coin] = dp ? dp.close : 0;
         });
         return point;
       });
 
       setChartData(points);
-      setFailedCoins(failed);
       saveToLocalStorage(points);
-      setIsStale(false);
-      setCacheTime(undefined);
+
+      // Mark successful coins; failed coins stay "loading" and get auto-retried
+      setCoinStatuses(
+        Object.fromEntries(
+          ALL_COIN_KEYS.map((coin) => [coin, failed.includes(coin) ? "loading" : "success"])
+        ) as Record<CoinKey, CoinStatus>
+      );
       setStatus("success");
+
+      // Kick off per-coin retries for any that failed — these update chartData in-place
+      for (const coin of failed) {
+        retryCoinFetch(coin, abort);
+      }
     } catch (err) {
+      if (abort.aborted) return;
+
       // All providers failed — try cache with stale warning
       const raw = localStorage.getItem(`history-chart-${numDays}`);
       if (raw) {
@@ -167,6 +271,7 @@ const History = ({ currency }: HistoryProps) => {
             setCacheTime(format(new Date(cacheEntry.cachedAt), "HH:mm d MMM", { locale: enAU }));
           }
           setIsStale(true);
+          setCoinStatuses(Object.fromEntries(ALL_COIN_KEYS.map((k) => [k, "success"])) as Record<CoinKey, CoinStatus>);
           setStatus("success");
           return;
         } catch {
@@ -176,7 +281,7 @@ const History = ({ currency }: HistoryProps) => {
       setError(String(err));
       setStatus("error");
     }
-  }, [numDays, currency, setStatus]);
+  }, [numDays, currency, setStatus, retryCoinFetch]);
 
   useEffect(() => {
     if (!window.navigator.onLine) {
@@ -185,6 +290,13 @@ const History = ({ currency }: HistoryProps) => {
     }
     fetchDays();
   }, [numDays, currency, fetchDays, restoreStateFromLocalStorage]);
+
+  // Abort in-flight retries on unmount
+  useEffect(() => {
+    return () => {
+      abortRef.current.aborted = true;
+    };
+  }, []);
 
   const formatTooltipValue = (value: number, name: string) => [
     formatCurrency(value, currency),
@@ -254,8 +366,11 @@ const History = ({ currency }: HistoryProps) => {
 
       <Status
         loading={
-          <div className="card p-6">
-            <div className="skeleton w-full h-64 rounded-lg"></div>
+          /* Per-coin skeletons match the actual chart layout for a smooth transition */
+          <div className="card p-4 sm:p-6 space-y-6">
+            {ALL_COIN_KEYS.map((coin) => (
+              <CoinChartSkeleton key={coin} coin={coin} />
+            ))}
           </div>
         }
         empty={<EmptyState />}
@@ -266,24 +381,40 @@ const History = ({ currency }: HistoryProps) => {
               <div className="p-4 sm:p-6 space-y-6">
                 {ALL_COIN_KEYS.map((coin) => {
                   const meta = COIN_META[coin];
-                  const hasFailed = failedCoins.includes(coin);
+                  const coinStatus = coinStatuses[coin];
+                  const attempt = coinRetryAttempts[coin];
                   return (
                     <div key={coin}>
                       <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-2">
                         <span
                           className="w-3 h-3 rounded-full inline-block"
                           style={{ backgroundColor: meta.color }}
-                        ></span>
+                        />
                         {meta.name} ({coin})
                       </h3>
-                      {hasFailed ? (
+
+                      {coinStatus === "loading" ? (
+                        /* Per-coin skeleton with optional retry progress indicator */
+                        <div>
+                          <div className="skeleton w-full rounded-lg" style={{ height: 160 }} />
+                          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5 flex items-center gap-1.5">
+                            <span className="inline-block w-3 h-3 border border-slate-300 dark:border-slate-600 border-t-transparent rounded-full animate-spin" />
+                            {attempt
+                              ? `Retrying… attempt ${attempt} of ${MAX_AUTO_RETRIES}`
+                              : "Loading…"}
+                          </p>
+                        </div>
+                      ) : coinStatus === "error" ? (
                         <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
                           <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9.303-3.376c.866 1.5-.217 3.374-1.948 3.374H4.645c-1.73 0-2.813-1.874-1.948-3.374L10.05 3.378c.866-1.5 3.032-1.5 3.898 0l5.355 9.246zM12 15.75h.007v.008H12v-.008z" />
                           </svg>
-                          Unable to load price history for {meta.name}
+                          Failed to load {meta.name} after {MAX_AUTO_RETRIES} attempts.
                           <button
-                            onClick={fetchDays}
+                            onClick={() => {
+                              setCoinStatuses((prev) => ({ ...prev, [coin]: "loading" }));
+                              retryCoinFetch(coin, abortRef.current);
+                            }}
                             className="ml-1 underline underline-offset-2 hover:text-red-900 dark:hover:text-red-300"
                           >
                             Retry
@@ -356,8 +487,8 @@ const History = ({ currency }: HistoryProps) => {
                             key={key}
                             className="px-4 py-3 text-right text-slate-900 dark:text-slate-100 tabular-nums"
                           >
-                            {failedCoins.includes(key) ? (
-                              <span className="text-red-400 dark:text-red-500 text-xs">—</span>
+                            {coinStatuses[key] !== "success" ? (
+                              <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
                             ) : (
                               formatCurrency(row[key] as number, currency)
                             )}
