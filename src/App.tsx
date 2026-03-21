@@ -3,6 +3,9 @@ import type { Currency, CoinKey } from "./types";
 import Today from "./Today/Today";
 import PriceAlerts from "./PriceAlerts/PriceAlerts";
 const History = lazy(() => import("./History/History"));
+const Feed = lazy(() => import("./feed/Feed"));
+
+type AppTab = "prices" | "feed";
 
 function App() {
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -16,6 +19,14 @@ function App() {
   });
 
   const [livePrices, setLivePrices] = useState<Record<CoinKey, number>>({} as Record<CoinKey, number>);
+
+  const [activeTab, setActiveTab] = useState<AppTab>(() => {
+    return (localStorage.getItem("activeTab") as AppTab) || "prices";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("activeTab", activeTab);
+  }, [activeTab]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -41,6 +52,30 @@ function App() {
             <h1 className="text-sm sm:text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight whitespace-nowrap">
               Easy Crypto Tracking
             </h1>
+          </div>
+
+          {/* Tab navigation */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-700 rounded-lg p-1 gap-0.5">
+            <button
+              onClick={() => setActiveTab("prices")}
+              className={`px-3 py-1 rounded-md text-xs font-semibold transition-all duration-200 ${
+                activeTab === "prices"
+                  ? "bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+              }`}
+            >
+              Prices
+            </button>
+            <button
+              onClick={() => setActiveTab("feed")}
+              className={`px-3 py-1 rounded-md text-xs font-semibold transition-all duration-200 ${
+                activeTab === "feed"
+                  ? "bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+              }`}
+            >
+              Feed
+            </button>
           </div>
 
           <div className="flex items-center gap-2">
@@ -83,17 +118,25 @@ function App() {
 
       {/* Main content */}
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6 space-y-6">
-        <div className="text-center">
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Live prices for BTC, ETH, XRP, SOL, DOGE, ADA &amp; LTC &mdash; updated every 60 seconds via Pusher
-          </p>
-        </div>
+        {activeTab === "prices" ? (
+          <>
+            <div className="text-center">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Live prices for BTC, ETH, XRP, SOL, DOGE, ADA &amp; LTC &mdash; updated every 60 seconds via Pusher
+              </p>
+            </div>
 
-        <Today currency={currency} onPriceUpdate={setLivePrices} />
-        <PriceAlerts currency={currency} livePrices={livePrices} />
-        <Suspense fallback={<div className="card p-6 animate-pulse h-48 rounded-xl" />}>
-          <History currency={currency} />
-        </Suspense>
+            <Today currency={currency} onPriceUpdate={setLivePrices} />
+            <PriceAlerts currency={currency} livePrices={livePrices} />
+            <Suspense fallback={<div className="card p-6 animate-pulse h-48 rounded-xl" />}>
+              <History currency={currency} />
+            </Suspense>
+          </>
+        ) : (
+          <Suspense fallback={<div className="card p-6 animate-pulse h-48 rounded-xl" />}>
+            <Feed />
+          </Suspense>
+        )}
       </main>
 
       {/* Footer */}
