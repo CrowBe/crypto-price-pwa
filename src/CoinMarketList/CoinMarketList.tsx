@@ -220,6 +220,10 @@ const CoinMarketList = ({ currency }: CoinMarketListProps) => {
   // Abort controller for in-flight requests
   const abortRef = useRef<AbortController | null>(null);
 
+  // Guards against the double-fetch that occurs on initial mount when both the
+  // query/currency effect and the desktop page effect run simultaneously.
+  const isInitialMountRef = useRef(true);
+
   // ---------------------------------------------------------------------------
   // Fetch logic
   // ---------------------------------------------------------------------------
@@ -262,11 +266,13 @@ const CoinMarketList = ({ currency }: CoinMarketListProps) => {
           setMobileCoins((prev) => [...prev, ...result]);
           setMobileHasMore(pageHasMore);
         } else {
+          // Populate both desktop and mobile state so the first page is
+          // visible on mobile without waiting for the IntersectionObserver.
           setCoins(result);
+          setMobileCoins(result);
           setHasMore(pageHasMore);
-          if (!isMobile) {
-            // Reset mobile state when navigating on desktop just in case
-          }
+          setMobileHasMore(pageHasMore);
+          setError(null); // Clear any stale error from a concurrent failed request
         }
       } catch (err: unknown) {
         if ((err as { name?: string })?.name === "AbortError") return;
@@ -293,9 +299,14 @@ const CoinMarketList = ({ currency }: CoinMarketListProps) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedQuery, currency]);
 
-  // Desktop: re-fetch when page changes
+  // Desktop: re-fetch when page changes (skip on initial mount — the
+  // query/currency effect above already fires the first fetch).
   useEffect(() => {
     if (isMobile) return;
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      return;
+    }
     fetchPage(page, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, isMobile]);
