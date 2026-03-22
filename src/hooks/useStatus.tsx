@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import type { ReactElement } from "react";
 import type { TLoadingState } from "../types";
 
@@ -21,8 +21,14 @@ type StatusProps = {
 const useStatus = (initialState: TLoadingState) => {
   const [status, setStatus] = useState<TLoadingState>(initialState);
 
-  const Status = (props: StatusProps): ReactElement | null =>
-    props[status] ?? null;
+  // Memoised so the component reference only changes when `status` changes.
+  // Without this, every parent re-render produces a new function reference,
+  // causing React to unmount/remount the rendered content and replay CSS
+  // animations (e.g. animate-fade-in) on unrelated state updates.
+  const Status = useCallback(
+    (props: StatusProps): ReactElement | null => props[status] ?? null,
+    [status]
+  );
 
   return { Status, setStatus };
 };
