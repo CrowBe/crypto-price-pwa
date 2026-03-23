@@ -34,6 +34,7 @@ function buildCoins(count = 5, offset = 0) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
   // Default: successful fetch of 5 coins
   mockFetchCoinMarkets.mockResolvedValue(buildCoins(5));
   mockSearchCoins.mockResolvedValue([]);
@@ -165,6 +166,59 @@ describe("CoinMarketList", () => {
     await waitFor(() => {
       expect(mockFetchCoinMarkets).toHaveBeenCalledWith("USD", 1, undefined);
     });
+  });
+
+  it("serves cached data with stale banner when API fails on initial load", async () => {
+    const cachedCoins = buildCoins(3);
+    localStorage.setItem(
+      "coinmarkets-AUD",
+      JSON.stringify({ data: cachedCoins, cachedAt: Date.now() - 60_000 })
+    );
+    mockFetchCoinMarkets.mockRejectedValue(new Error("503 Service Unavailable"));
+
+    render(<CoinMarketList currency="AUD" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Coin 0")).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Live data unavailable/i)).toBeInTheDocument();
+    expect(screen.queryByText("Failed to load coins")).not.toBeInTheDocument();
+  });
+
+  it("saves first-page results to localStorage on success", async () => {
+    const coins = buildCoins(5);
+    mockFetchCoinMarkets.mockResolvedValue(coins);
+
+    render(<CoinMarketList currency="AUD" />);
+    await waitFor(() => screen.getByText("Coin 0"));
+
+    const cached = JSON.parse(localStorage.getItem("coinmarkets-AUD") ?? "null");
+    expect(cached).not.toBeNull();
+    expect(cached.data).toHaveLength(5);
+    expect(cached.cachedAt).toBeGreaterThan(0);
+  });
+
+  it("retries live data from stale banner Retry button", async () => {
+    const cachedCoins = buildCoins(2);
+    localStorage.setItem(
+      "coinmarkets-AUD",
+      JSON.stringify({ data: cachedCoins, cachedAt: Date.now() })
+    );
+    mockFetchCoinMarkets
+      .mockRejectedValueOnce(new Error("fail"))
+      .mockResolvedValueOnce(buildCoins(5));
+
+    render(<CoinMarketList currency="AUD" />);
+
+    // First render falls back to cache
+    await waitFor(() => screen.getByText(/Live data unavailable/i));
+
+    // Retry fetches live data
+    await userEvent.click(screen.getByRole("button", { name: /Retry/i }));
+    await waitFor(() => {
+      expect(screen.queryByText(/Live data unavailable/i)).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("Coin 0")).toBeInTheDocument();
   });
 
   it("displays positive price change in green and negative in red", async () => {

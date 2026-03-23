@@ -213,6 +213,8 @@ const CoinMarketList = ({ currency }: CoinMarketListProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isStale, setIsStale] = useState(false);
+  const [cacheTime, setCacheTime] = useState<string | undefined>();
 
   // Sentinel ref for IntersectionObserver (mobile)
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -239,6 +241,8 @@ const CoinMarketList = ({ currency }: CoinMarketListProps) => {
       } else {
         setIsLoading(true);
         setError(null);
+        setIsStale(false);
+        setCacheTime(undefined);
       }
 
       try {
@@ -273,9 +277,42 @@ const CoinMarketList = ({ currency }: CoinMarketListProps) => {
           setHasMore(pageHasMore);
           setMobileHasMore(pageHasMore);
           setError(null); // Clear any stale error from a concurrent failed request
+          // Persist first page (no active search) so we can serve it offline
+          if (!debouncedQuery.trim() && targetPage === 1) {
+            try {
+              localStorage.setItem(
+                `coinmarkets-${currency}`,
+                JSON.stringify({ data: result, cachedAt: Date.now() })
+              );
+            } catch { /* storage quota exceeded — ignore */ }
+          }
         }
       } catch (err: unknown) {
         if ((err as { name?: string })?.name === "AbortError") return;
+        // For non-search initial loads fall back to cached data rather than
+        // showing a hard error with an empty list.
+        if (!debouncedQuery.trim() && targetPage === 1 && !append) {
+          try {
+            const raw = localStorage.getItem(`coinmarkets-${currency}`);
+            if (raw) {
+              const cached = JSON.parse(raw) as { data: ICoinMarketData[]; cachedAt: number };
+              setCoins(cached.data);
+              setMobileCoins(cached.data);
+              setHasMore(false);
+              setMobileHasMore(false);
+              setIsStale(true);
+              if (cached.cachedAt) {
+                setCacheTime(
+                  new Date(cached.cachedAt).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                );
+              }
+              return; // Serving from cache — don't set an error
+            }
+          } catch { /* corrupt cache — fall through to error */ }
+        }
         setError("Failed to load coins. Please try again.");
       } finally {
         setIsLoading(false);
@@ -380,6 +417,23 @@ const CoinMarketList = ({ currency }: CoinMarketListProps) => {
           )}
         </div>
       </div>
+
+      {/* Stale data banner — shown when serving from cache after an API failure */}
+      {isStale && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400">
+          <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+          Live data unavailable — showing cached prices
+          {cacheTime ? ` from ${cacheTime}` : ""}.{" "}
+          <button
+            onClick={() => fetchPage(1, false)}
+            className="ml-1 underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-300"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* List container */}
       <div className="card overflow-hidden">
