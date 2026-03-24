@@ -3,7 +3,6 @@ import type { Currency, CoinKey } from "./types";
 import Today from "./Today/Today";
 import PriceAlerts from "./PriceAlerts/PriceAlerts";
 const History = lazy(() => import("./History/History"));
-const CoinMarketList = lazy(() => import("./CoinMarketList/CoinMarketList"));
 
 function App() {
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -86,15 +85,12 @@ function App() {
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6 space-y-6">
         <div className="text-center">
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Live prices for BTC, ETH, XRP, SOL, DOGE, ADA &amp; LTC &mdash; plus a searchable market explorer
+            Live prices for BTC, ETH, XRP, SOL, DOGE, ADA &amp; LTC
           </p>
         </div>
 
         <Today currency={currency} onPriceUpdate={setLivePrices} />
         <PriceAlerts currency={currency} livePrices={livePrices} />
-        <Suspense fallback={<div className="card p-6 animate-pulse h-48 rounded-xl" />}>
-          <CoinMarketList currency={currency} />
-        </Suspense>
         <Suspense fallback={<div className="card p-6 animate-pulse h-48 rounded-xl" />}>
           <History currency={currency} />
         </Suspense>
